@@ -1,0 +1,25 @@
+name:		muterm-framework
+version: 	1.0
+cabal-version:	>= 1.2
+description: 	A framework for building DP framework-based solvers
+license: 	AllRightsReserved
+license-file: 	LICENSE
+copyright:
+author:		Jose Iborra, Raul Gutierrez
+maintainer: 	rgutierrez@dsic.upv.es
+build-type: 	Simple
+stability:
+homepage:	http://zenon.dsic.upv.es/muterm/
+package-url:
+synopsis:
+category:
+tested-with:	
+
+Library
+  exposed-modules:
+    Framework.Problem,
+    Framework.Processor,
+    Framework.Proof
+
+  build-depends: 	base -any, mtl, control-monad-free -any
+  ghc-options:   	-O2 -threaded 

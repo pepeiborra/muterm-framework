@@ -17,9 +17,11 @@ tested-with:
 
 Library
   exposed-modules:
-    Framework.Problem,
-    Framework.Processor,
-    Framework.Proof
+    MuTerm.Framework.Problem,
+    MuTerm.Framework.Processor,
+    MuTerm.Framework.Proof,
+    MuTerm.Framework.Strategy,
+    MuTerm.Framework.Ppr
 
-  build-depends: 	base -any, mtl, control-monad-free -any
+  build-depends: 	base -any, mtl, control-monad-free -any, containers, pretty
   ghc-options:   	-O2 -threaded 

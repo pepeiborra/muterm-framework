@@ -25,6 +25,7 @@ Processor (..)
 ) where
 
 import MuTerm.Framework.Proof (Proof)
+import MuTerm.Framework.Problem
 
 -----------------------------------------------------------------------------
 -- Classes
@@ -32,5 +33,5 @@ import MuTerm.Framework.Proof (Proof)
 
 -- | Each processor is an instance of the class 'Processor'. The
 -- output problem depends of the input problem and viceversa
-class Processor tag o d | tag o -> d, tag d -> o where
-  apply   :: tag -> o -> Proof d
+class (IsDPProblem o, IsDPProblem d) => Processor tag trs o d | tag o -> d, tag d -> o where
+  apply   :: tag -> DPProblem o trs -> Proof (DPProblem d trs)

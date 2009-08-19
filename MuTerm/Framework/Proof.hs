@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,12 +23,14 @@ module MuTerm.Framework.Proof (
 -- * Exported data
 
 ProofF(..), Proof, Solution (..)
+, Dispatch(..)
 
 -- * Exported classes
 
 , ProofInfo (..), SomeInfo (..)
 
--- * Exported function
+-- * Exported functions
+, mkDispatcher
 
 , success, singleP, andP, runProof, runProofSol, stage, dontKnow
 , choiceP, failP
@@ -35,21 +38,23 @@ ProofF(..), Proof, Solution (..)
 ) where
 
 
-import Control.Monad (MonadPlus (..), msum, liftM, join, (>>=))
-import Control.Monad.Free (Free (..), foldFree)
+import Control.Monad as M (MonadPlus(..), msum, liftM, join, (>>=))
+import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
 import Control.Applicative((<$>))
-import MuTerm.Framework.Problem (Problem (..), SomeProblem (..), someProblem)
-import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes)
-import System.IO.Unsafe (unsafePerformIO)
 import Control.Monad.Reader (MonadReader (..))
+import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
+import System.IO.Unsafe (unsafePerformIO)
+
 import Control.Applicative
 import Data.DeriveTH
 import Data.Derive.Functor
 import Data.Derive.Traversable
 import Data.Foldable (Foldable(..))
 import Data.Traversable as T (Traversable(..), foldMapDefault)
+
+import MuTerm.Framework.Problem
 import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
---import Control.Monad.Cont (MonadCont (..), runCont)
+
 
 -----------------------------------------------------------------------------
 -- Data
@@ -87,6 +92,12 @@ type Proof a = Free (ProofF) a
 -----------------------------------------------------------------------------
 -- Classes
 -----------------------------------------------------------------------------
+
+mkDispatcher :: (a -> Proof b) ->  a -> Proof ()
+mkDispatcher f = fmap (const ()) . f
+
+class IsDPProblem typ => Dispatch typ trs where
+    dispatch :: DPProblem typ trs -> Proof ()
 
 -- | Class that show the info of the proofs in the desired format
 class Ppr p => ProofInfo p where

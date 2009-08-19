@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Proof
@@ -41,6 +42,12 @@ import MuTerm.Framework.Problem (Problem (..), SomeProblem (..), someProblem)
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes)
 import System.IO.Unsafe (unsafePerformIO)
 import Control.Monad.Reader (MonadReader (..))
+import Control.Applicative
+import Data.DeriveTH
+import Data.Derive.Functor
+import Data.Derive.Traversable
+import Data.Foldable (Foldable(..))
+import Data.Traversable as T (Traversable(..), foldMapDefault)
 import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
 --import Control.Monad.Cont (MonadCont (..), runCont)
 
@@ -93,42 +100,10 @@ class Ppr p => ProofInfo p where
 -- Instances
 -----------------------------------------------------------------------------
 
--- Functor
-
--- | Proof is a functor
-instance Functor (ProofF) where
-    fmap f (Single { procInfo    = procInfo'
-                   , subProblem  = subproblem'
-                   })
-        = Single { procInfo    = procInfo'
-                 , subProblem  = f subproblem'
-                 }
-    fmap f (And { procInfo    = procInfo'
-                , subProblems = subproblems'
-                })
-        = And { procInfo    = procInfo'
-              , subProblems = fmap f subproblems'
-              }
-    fmap f (Or { procInfo    = procInfo'
-               , subProblems = subproblems'
-               })
-        = Or { procInfo    = procInfo'
-             , subProblems = fmap f subproblems'
-             }
-    fmap f (Success { procInfo    = procInfo'
-                    })
-        = Success { procInfo    = procInfo'
-                  }
-    fmap f (Fail { procInfo    = procInfo'
-                 })
-        = Fail { procInfo    = procInfo'
-               }
-    fmap f DontKnow
-        = DontKnow
-    fmap f (MPlus p1 p2) 
-        = MPlus (f p1) (f p2)
-    fmap f MZero 
-        = MZero
+instance Foldable ProofF where foldMap = T.foldMapDefault
+$(derive makeFunctor     ''Solution)
+$(derive makeFunctor     ''ProofF)
+$(derive makeTraversable ''ProofF)
 
 -- MonadPlus
 

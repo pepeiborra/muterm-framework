@@ -39,9 +39,9 @@ import Control.Monad.Free (Free (..), foldFree)
 import Control.Applicative((<$>))
 import MuTerm.Framework.Problem (Problem (..), SomeProblem (..), someProblem)
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes)
-import MuTerm.Framework.Ppr (Output(..), Ppr(..), ppr, text, (<+>), Doc)
 import System.IO.Unsafe (unsafePerformIO)
 import Control.Monad.Reader (MonadReader (..))
+import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
 --import Control.Monad.Cont (MonadCont (..), runCont)
 
 -----------------------------------------------------------------------------
@@ -140,12 +140,12 @@ instance MonadPlus (Free (ProofF)) where
 -- Show
 
 instance Show SomeInfo where
-    show (SomeInfo p) = showPlain p
+    show (SomeInfo p) = show (ppr p)
 
 -- Ppr
 
 instance Ppr SomeInfo where
-    pprBase (SomeInfo p) = pprPlain p
+    ppr (SomeInfo p) = ppr p
 
 -----------------------------------------------------------------------------
 -- Functions

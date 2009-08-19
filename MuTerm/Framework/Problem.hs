@@ -31,7 +31,7 @@ module MuTerm.Framework.Problem (
 
 ) where
 
-import MuTerm.Framework.Ppr (Ppr (..), ppr)
+import MuTerm.Framework.Ppr (Ppr (..))
 
 import Control.Monad (liftM)
 import Control.Monad.Reader (MonadReader (..))

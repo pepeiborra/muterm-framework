@@ -19,7 +19,7 @@ module MuTerm.Framework.Problem (
 
 -- * Exported data
 
-  IsDPProblem (..), setP, setR
+  IsDPProblem (..)
 , SomeProblem (..), someProblem
 --,  RewProblem, CSRewProblem, TermProblem, CSTermProblem
 
@@ -59,10 +59,9 @@ class Functor (DPProblem typ) => IsDPProblem typ where
     mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> DPProblem typ trs
     getP, getR     :: DPProblem typ trs -> trs
     mapP, mapR     :: (trs -> trs) -> DPProblem typ trs -> DPProblem typ trs
-
-setR, setP :: IsDPProblem typ => trs -> DPProblem typ trs -> DPProblem typ trs
-setR rr = mapR (const rr)
-setP rr = mapP (const rr)
+    setR, setP     :: trs -> DPProblem typ trs -> DPProblem typ trs
+    setR rr = mapR (const rr)
+    setP rr = mapP (const rr)
 
 -- | 'SomeProblem' hides the type of the problem
 data SomeProblem where

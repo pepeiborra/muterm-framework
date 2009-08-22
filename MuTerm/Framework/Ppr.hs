@@ -27,8 +27,6 @@ module MuTerm.Framework.Ppr (
 ) where
 
 import Text.PrettyPrint.HughesPJ as Ppr -- (Doc, text, (<+>), int, comma, brackets, hsep, parens, punctuate, char, (<>), hcat, empty)
-import Data.Set as S (Set, elems, null)
-import Control.Monad.Reader (MonadReader (..))
 
 -----------------------------------------------------------------------------
 -- Classes

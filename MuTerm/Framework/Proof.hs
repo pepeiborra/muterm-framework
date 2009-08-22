@@ -160,6 +160,8 @@ instance Show SomeInfo where
 instance Ppr SomeInfo where
     ppr (SomeInfo p) = ppr p
 
+instance ProofInfo SomeInfo
+
 instance HTML SomeInfo where toHtml (SomeInfo i) = toHtml i
 
 -----------------------------------------------------------------------------

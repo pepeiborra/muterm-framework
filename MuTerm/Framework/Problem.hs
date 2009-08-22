@@ -36,7 +36,6 @@ import Text.XHtml (HTML(..))
 
 
 -----------------------------------------------------------------------------
-class IsDPProblem typ where
 {-
 -- Problems are modeled as a data family associated to the class IsDPProblem.
 -- The motivation to use a type class is to keep the type of problems open.
@@ -54,6 +53,7 @@ class IsDPProblem typ where
 -}
 
 
+class Functor (DPProblem typ) => IsDPProblem typ where
     data DPProblem typ :: * -> *
     getProblemType :: DPProblem typ trs -> typ
     mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> DPProblem typ trs

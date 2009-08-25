@@ -13,7 +13,7 @@
 -- Copyright   :  (c) muterm development team
 -- License     :  see LICENSE
 --
--- Maintainer  :  rgutierrez@dsic.upv.es
+-- Maintainer  :  jiborra@dsic.upv.es
 -- Stability   :  unstable
 -- Portability :  non-portable
 --
@@ -50,6 +50,7 @@ import Text.Dot hiding (node, edge, attribute)
 import Prelude hiding (unlines)
 
 import MuTerm.Framework.DotRep
+import MuTerm.Framework.Ppr as Ppr
 import MuTerm.Framework.Proof
 import MuTerm.Framework.Problem
 
@@ -60,11 +61,11 @@ gs = repG . dotSimple
 -- ----------------------------
 -- GraphViz logs
 -- ----------------------------
-sliceWorkDone = foldFree return (Impure . f) where
+sliceWorkDone p = foldFree return (Impure . f) p where
     f (Or  p pi pp) = (Or  p pi $ takeWhileAndOneMore (not . isSuccess) pp)
     f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
 --    f (MPlusPar p1 p2) = if isSuccess p1 then Stage p1 else (MPlusPar p1 p2)  -- We use stage in lieu of return here
-    f (MPlus    p1 p2) = if isSuccess p1 then Stage p1 else (MPlus    p1 p2)
+    f (MPlus    p1 p2) = if isSuccess p1      then Stage p1 else (MPlus    p1 p2)
     f (MAnd     p1 p2) = if not(isSuccess p1) then Stage p1 else (MAnd p1 p2)
     f x = x
     takeWhileAndOneMore _ []     = []
@@ -77,29 +78,30 @@ dotProof = dotProof' DotProof{showFailedPaths=False}
 dotProof' DotProof{..} p = showDot $ do
                              attribute (Size (Point 100 100))
                              attribute (Compound True)
-                             foldFree (\_ -> colorJoin False [textNode "?" []]) f
+                             foldFree (\_ -> colorJoin False [textNode (text "?") []]) f
                               $ annotate (const False) isSuccess
                               $ sliceWorkDone
                               $ p
  where
---   f (Annotated done Success{..}) = return (mdot problem >- mdot procInfo >- Text "YES" [mkColor "#29431C"])
-   f (Annotated done Success{..}) = colorJoin done [g problem, g procInfo, textNode "YES" [mkColor "#29431C"]]
-   f (Annotated done Fail{..})    = colorJoin done [g problem, g procInfo, textNode "NO"  [mkColor "#60233E"]]
+   f (Annotated done Success{..}) = colorJoin done [g problem, g procInfo, textNode (text "YES") [Color $ mkColor "#29431C"]]
+   f (Annotated done Fail{..})    = colorJoin done [g problem, g procInfo, textNode (text "NO")  [Color $ mkColor "#60233E"]]
    f (Annotated _ MZero{})        = mempty
    f (Annotated _ MDone{})        = mempty
-   f (Annotated done DontKnow{..})= colorJoin done [g procInfo, textNode "Don't Know" []]
+   f (Annotated done DontKnow{..})= colorJoin done [g procInfo, textNode (text "Don't Know") []]
    f (Annotated done (MAnd p1 p2))= do
         (cme, node) <- cluster $ do
-                 attribute (mkColor "#E56A90")
+                 attribute (Color $ mkColor "#E56A90")
                  p1 ->> p2
         return (mkClusterNode cme <$> node)
---   f (Annotated done (MPlus p1 p2)) = colorJoin done [node [Shape PointShape, label ""], (p1 ||| p2)]
+
+
+   f (Annotated done (MPlus p1 p2)) = colorJoin done [node [Shape PointShape, label Ppr.empty]] ->> (p1 ||| p2)
    f (Annotated done And{subProblems=[p], ..}) = f (Annotated done Single{subProblem = p, ..})
    f (Annotated done And{..}) = do
         let trs = if (done || showFailedPaths) then g problem else return EmptyNode
         (cme, node) <- cluster $ do
-                    attribute (mkColor "#E56A90")
-                    colorJoin done [trs, g procInfo] -- , allPar subProblems]
+                    attribute (Color $ mkColor "#E56A90")
+                    colorJoin done [trs, g procInfo] ->> allPar subProblems
         return (mkClusterNode cme <$> node)
 
    f (Annotated done Single{..})
@@ -108,63 +110,8 @@ dotProof' DotProof{..} p = showDot $ do
    f (Annotated _ (Stage p)) = p
 
 
-colorJoin True  = foldMap (liftM (ParamJoin [mkColor "green"]))
-colorJoin False = foldMap (liftM (ParamJoin [mkColor "red"]))
-
-{-
-{-
-    f (Annotated done Or{..})   par
-      | done || showFailedPaths = problemNode problem done par >>= proofnode done procInfo >>= \me -> forM_ subProblems ($ me) >> return me
-      | otherwise = proofnode done procInfo par   >>= \me -> forM_ subProblems ($ me) >> return me
--}
---    problemLabel :: (Ord v, Ppr v, Ord id, Ppr id) => Problem id v -> (String, String)
-    problemLabel p = ("label", pprTPDBdot p)
-
---    problemColor :: Problem id v -> (String, String)
---    problemAttrs :: (Ord v, Ppr v, Ord id, Show id) => Problem id v -> [(String,String)]
-    problemAttrs p    = [problemLabel p, problemColor p, ("shape","box"), ("style","bold"),("fontname","monospace"),("fontsize","10"),("margin",".2,.2")]
-
-    problemNode  (SomeProblem p) done par = childnode'(problemAttrs p) (doneEdge done) par
-
-    proofnode' procInfo done par = childnode' [("label", show procInfo)] (doneEdge done) par
-
-childnode' attrs edge_attrs (N par) = node (("URL","url"):attrs) >>= \n -> edge par n edge_attrs >> return (N n)
-childnode' attrs edge_attrs (Cluster (cl,par)) = node (("URL","url"):attrs) >>= \n -> edge (getParentNode par) n (("ltail", show cl):edge_attrs) >> return (N n)
-
-doneEdge True     = [("color", "green")]
-doneEdge False    = [("color", "red")]
-
-
-{-
-    proofnode :: Bool -> SomeInfo -> Parent -> Dot Parent
-    proofnode done (SomeInfo (DependencyGraph gr)) par | done || showFailedPaths = do
-      (cl, nn) <- cluster (attribute ("shape", "ellipse") >> pprGraph gr [])
-      case nn of
-        []   -> return par
-        me:_ -> do case par of
-                     N n             -> edge n me ([("lhead", show cl)] ++ doneEdge done)
-                     Cluster (cl',n) -> edge (getParentNode n) me [("ltail", show cl'), ("lhead", show cl)]
-                   return (Cluster (cl, N me))
-
-    proofnode done (SomeInfo (SCCGraph gr sccs)) par = do
-      (cl, nn) <- cluster (
-                    attribute ("shape", "ellipse") >>
-                    pprGraph gr (zip sccs (cycle ["yellow","darkorange"
-                                                 , "hotpink", "hotpink4", "purple", "brown","red","green"])))
-      case (nn,par) of
-        ([]  , _  )             -> return par
-        (me:_, N n)             -> edge n me ([("lhead", show cl)] ++ doneEdge done) >> return (Cluster (cl, N me))
-        (me:_, Cluster (cl',n)) -> edge (getParentNode n) me [("ltail", show cl'), ("lhead", show cl)] >> return (Cluster (cl, N me))
-
-
-    proofnode done (SomeInfo (UsableGraph gr reachable)) par = do
-      (cl, nn) <- cluster (attribute ("shape", "ellipse") >> (pprGraph gr [(reachable,"blue")]))
-      case (nn,par) of
-        ([]  , _  )             -> return par
-        (me:_, N n)             -> edge n me ([("lhead", show cl)] ++ doneEdge done) >> return (Cluster (cl, N me))
-        (me:_, Cluster (cl',n)) -> edge (getParentNode n) me ([("ltail", show cl'), ("lhead", show cl)] ++ doneEdge done) >> return (Cluster (cl, N me))
--}
--}
+colorJoin True  = foldMap (liftM (ParamJoin [Color $ mkColor "green"]))
+colorJoin False = foldMap (liftM (ParamJoin [Color $ mkColor "red"]))
 
 -- ----------------------------------------------------------------
 -- dotgen constructors with a proper enumerated type for attributes
@@ -192,7 +139,10 @@ showA att = (name,val)
 data DotNode = EmptyNode
              | DotNode  { inId , outId :: NodeId }
              | ClusterNode { inId , outId, clusterId :: NodeId }
-             | ParNode { inIds, outIds :: [NodeId]}
+             | CompoundNode {headNode, tailNode :: DotNode}
+             | ParNodes [DotNode]
+
+  deriving Show
 
 mkClusterNode c (DotNode a b) = ClusterNode c a b
 
@@ -200,22 +150,31 @@ instance Monoid (Dot DotNode) where
   mempty  = return EmptyNode
   mappend = (join.) . liftM2 (joinNodes [])
 
+compoundNode (DotNode a b) (CompoundNode (DotNode c d) n3) = CompoundNode (DotNode a d) n3
+compoundNode n1 n2 = CompoundNode n1 n2
 
 joinNodes atts EmptyNode b = return b
 joinNodes atts a EmptyNode = return a
-joinNodes atts (DotNode a b) (ParNode aa bb)
-    = do {mapM_ (\a -> edge b a atts) aa; return $ ParNode [a] bb}
-joinNodes atts (DotNode a b) (ClusterNode c d cId)
-    = do {edge b c (LHead (show cId) : LTail (show cId) : atts); return (DotNode a d)}
 joinNodes atts (DotNode a b) (DotNode c d)
             = do {edge b c atts; return (DotNode a d)}
+joinNodes atts n1 n2@(ParNodes nn)
+    = do {mapM_ (joinNodes atts n1) nn ; return $ CompoundNode n1 n2}
+joinNodes atts n1@(DotNode a b) n2@(ClusterNode c d cId)
+    = do {edge b c (LHead (show cId) : LTail (show cId) : atts); return (compoundNode n1 n2)}
+joinNodes atts n1@(ClusterNode a b cId) n2@(DotNode c d)
+    = do {edge b c (LHead (show cId) : LTail (show cId) : atts); return (compoundNode n1 n2)}
+joinNodes atts (CompoundNode n1 n2) n3
+    = do {n2' <- joinNodes atts n2 n3; return (compoundNode n1 n2')}
+joinNodes atts n1 (CompoundNode n2 n3)
+    = do {n2' <- joinNodes atts n1 n2; return (compoundNode n2' n3)}
+joinNodes _ n1 n2 = error ("joinNodes missing case for " ++ show n1 ++ " " ++ show n2)
 
 parNodes EmptyNode b = b
 parNodes a EmptyNode = a
-parNodes (DotNode a b) (DotNode c d) = ParNode [a,c] [b,d]
-
-(|||) = liftM2 parNodes
-allPar = Prelude.foldr (|||) (return EmptyNode)
+parNodes (ParNodes n1) (ParNodes n2) = ParNodes (n1 ++ n2)
+parNodes n1 (ParNodes n2) = ParNodes (n1 : n2)
+parNodes (ParNodes n1) n2 = ParNodes (n1 ++ [n2])
+parNodes  n1 n2 = ParNodes [n1, n2]
 
 textNode t att = do
   n <- node_ (label t : att)
@@ -238,6 +197,13 @@ emptyNode = ParamJoin [] EmptyNode
 
 (->>) = mappend -- joinNodes []
 --a ->> b = ParamJoin [] a `mappend` ParamJoin [] b
+
+a ||| b = do
+      ParamJoin c1 n1 <- a
+      ParamJoin c2 n2 <- b
+      return (ParamJoin (c1++c2) $ parNodes n1 n2)
+
+allPar = Prelude.foldr (|||) mempty
 
 
 -- ---------------------------

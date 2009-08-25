@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, TypeSynonymInstances #-}
+{-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -53,6 +54,7 @@ import Data.Traversable as T (Traversable(..), foldMapDefault)
 
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
+import MuTerm.Framework.DotRep
 
 import Prelude as P
 
@@ -135,7 +137,22 @@ class IsDPProblem typ => Dispatch typ trs where
     dispatch :: DPProblem typ trs -> Proof ()
 
 -- | Class that show the info of the proofs in the desired format
-class (HTML p, Ppr p) => ProofInfo p where
+class (HTML p, Ppr p, DotRep p) => ProofInfo p
+class (HTML p, Ppr p, DotRep p) => ProblemInfo p
+
+instance (HTML (DPProblem typ trs), Ppr (DPProblem typ trs), DotRep (DPProblem typ trs)) => ProblemInfo (DPProblem typ trs)
+
+instance Ppr SomeInfo where ppr (SomeInfo p) = ppr p
+instance Ppr  SomeProblem where ppr (SomeProblem p) = ppr p
+
+instance HTML SomeInfo where toHtml (SomeInfo i) = toHtml i
+instance HTML SomeProblem where toHtml  (SomeProblem p) = toHtml p
+
+instance DotRep SomeProblem where dot (SomeProblem p) = dot p; dotSimple (SomeProblem p) = dotSimple p
+instance DotRep SomeInfo where dot (SomeInfo p) = dot p; dotSimple (SomeInfo p) = dotSimple p
+
+instance ProofInfo SomeInfo
+instance ProofInfo SomeProblem
 
 -----------------------------------------------------------------------------
 -- Instances
@@ -158,42 +175,35 @@ instance MonadPlus (Free (ProofF)) where
 instance Show SomeInfo where
     show (SomeInfo p) = show (ppr p)
 
--- Ppr
 
-instance Ppr SomeInfo where
-    ppr (SomeInfo p) = ppr p
-
-instance ProofInfo SomeInfo
-
-instance HTML SomeInfo where toHtml (SomeInfo i) = toHtml i
 
 -----------------------------------------------------------------------------
 -- Smart Constructors
 -----------------------------------------------------------------------------
 
 -- | Return a success node
-success :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+success :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
 success pi p0 = Impure (Success (someInfo pi) (someProblem p0))
 
 -- | Return a fail node
-failP :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+failP :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
 failP pi p0 = Impure (Fail (someInfo pi) (someProblem p0))
 
 -- | Returns a don't know node
-dontKnow :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+dontKnow :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
 dontKnow pi p0 = Impure (DontKnow (someInfo pi) (someProblem p0))
 
 -- | Return a new single node
-singleP :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> b -> Proof b
+singleP :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> b -> Proof b
 singleP pi p0 p = Impure (Single (someInfo pi) (someProblem p0) (return p))
 
 -- | Return a list of nodes
-andP :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> [b] -> Proof b
+andP :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> [b] -> Proof b
 andP pi p0 [] = success pi p0
 andP pi p0 pp = Impure (And (someInfo pi) (someProblem p0) (map return pp))
 
 -- | Return a decision among nodes
-orP :: (ProofInfo pi, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => pi -> DPProblem typ a -> [b] -> Proof b
+orP :: (ProofInfo pi, ProblemInfo (DPProblem typ a)) => pi -> DPProblem typ a -> [b] -> Proof b
 orP pi p0 [] = success pi p0
 opP pi p0 pp = Impure (Or (someInfo pi) p0 (map return pp))
 

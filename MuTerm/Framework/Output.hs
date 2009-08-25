@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts,FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PatternGuards, ViewPatterns #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -25,18 +26,19 @@ import Data.HashTable (hashString)
 
 import qualified Text.XHtml as H
 import Text.XHtml hiding (text)
-import MuTerm.Framework.Ppr as Doc
+
+import MuTerm.Framework.DotRep
+import MuTerm.Framework.Ppr as Doc hiding (Style)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Proof
 
 -- ----
 -- Text
 -- ----
---instance Ppr  SomeProblem where ppr (SomeProblem p) = ppr p
 
 instance (Ppr a) => Ppr (ProofF a) where ppr = pprProofF
 pprProofF = f where
-      f MZero = text "don't know"
+      f MZero = empty -- text "don't know"
       f Success{..} =
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo $$
@@ -91,7 +93,6 @@ pprProofF = f where
 -- HTML
 -------------
 
---instance HTML SomeProblem where toHtml  (SomeProblem p) = toHtml p
 instance HTML Doc where toHtml = toHtml . show
 --instance HTML a => HTMLTABLE a where cell = cell . toHtml
 {-
@@ -169,3 +170,23 @@ thickbox thing c | label <- hashHtml thing =
          H.hotlink ("#TB_inline?height=600&width=600&inlineId=tb" ++ label) ! [theclass "thickbox"] << c
 
 hashHtml = show . abs . hashString . H.renderHtml
+
+
+-- ----
+-- Dot
+-- ----
+
+instance (IsDPProblem typ, Ppr rules) => DotRep (DPProblem typ [rules]) where
+  dot p = Text rep atts where
+    atts = [ Shape BoxShape
+           , Style (Stl Bold Nothing)
+           , FontName "monospace"
+           , FontSize 10
+           , Margin (PVal (PointD 0.2 0.2))]
+    rep = vcat
+     [parens( text "PAIRS" $$
+             nest 1 (vcat $ map ppr (getP p)))
+     ,parens( text "RULES" $$
+             nest 1 (vcat $ map ppr (getR p)))
+     ]
+

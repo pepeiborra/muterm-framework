@@ -167,6 +167,7 @@ $(derive makeTraversable ''ProofF)
 
 instance MonadPlus (Free (ProofF)) where 
     mzero       = Impure MZero
+    mplus p1 (Impure MZero) = p1
     mplus p1 p2 = Impure (MPlus p1 p2) 
                   -- if isSuccess p1 then p1 else choiceP p1 p2
 
@@ -175,7 +176,10 @@ instance MonadPlus (Free (ProofF)) where
 instance Show SomeInfo where
     show (SomeInfo p) = show (ppr p)
 
+-- Default 'bogus' Instances of Representation classes
 
+instance Ppr a => DotRep a where dot    x = Text (ppr x) []
+instance Ppr a => HTML   a where toHtml x = toHtml (show $ ppr x)
 
 -----------------------------------------------------------------------------
 -- Smart Constructors

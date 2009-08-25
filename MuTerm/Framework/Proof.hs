@@ -25,9 +25,8 @@ module MuTerm.Framework.Proof (
 ProofF(..), Proof, Solution (..)
 , Dispatch(..)
 
--- * Exported classes
-
-, ProofInfo (..), SomeInfo (..)
+, ProblemInfo(..), SomeProblem(..), someProblem
+, ProofInfo (..), SomeInfo (..), someInfo
 
 -- * Exported functions
 , mkDispatcher
@@ -82,6 +81,10 @@ type Proof a = Free (ProofF) a
 -- | 'SomeInfo' hides the type of the proccesor info
 data SomeInfo where
     SomeInfo :: ProofInfo p => p -> SomeInfo
+
+-- | 'SomeProblem' hides the type of the problem
+data SomeProblem where
+    SomeProblem :: (HTML (DPProblem typ a), Ppr (DPProblem typ a), DotRep (DPProblem typ a)) => DPProblem typ a -> SomeProblem
 
 instance Show SomeProblem where
   show _ = "SomeProblem"
@@ -212,6 +215,10 @@ mprod = P.foldr mand (Impure MDone) . map return where
 -- | Pack the proof information
 someInfo :: ProofInfo p => p -> SomeInfo
 someInfo = SomeInfo
+
+-- | Pack the problem
+someProblem :: (ProblemInfo (DPProblem typ a)) => DPProblem typ a -> SomeProblem
+someProblem = SomeProblem
 
 -- | We obtain if the proof is a solution
 isSuccessF :: ProofF Bool -> Bool

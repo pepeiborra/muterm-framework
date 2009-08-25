@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
 -----------------------------------------------------------------------------
@@ -15,24 +15,7 @@
 --
 -----------------------------------------------------------------------------
 
-module MuTerm.Framework.Problem (
-
--- * Exported data
-
-  IsDPProblem (..)
-, SomeProblem (..), someProblem
---,  RewProblem, CSRewProblem, TermProblem, CSTermProblem
-
--- * Exported functions
-
-
-) where
-
-import MuTerm.Framework.Ppr (Ppr (..))
-
-import Data.Traversable
-import Data.Monoid
-import Text.XHtml (HTML(..))
+module MuTerm.Framework.Problem (  IsDPProblem (..)  ) where
 
 
 -----------------------------------------------------------------------------
@@ -62,15 +45,3 @@ class Functor (DPProblem typ) => IsDPProblem typ where
     setR, setP     :: trs -> DPProblem typ trs -> DPProblem typ trs
     setR rr = mapR (const rr)
     setP rr = mapP (const rr)
-
--- | 'SomeProblem' hides the type of the problem
-data SomeProblem where
-    SomeProblem :: (HTML (DPProblem typ a), Ppr (DPProblem typ a)) => DPProblem typ a -> SomeProblem
-
--- | Pack the problem
-someProblem :: (HTML (DPProblem typ a), Ppr (DPProblem  typ a)) => DPProblem typ a -> SomeProblem
-someProblem = SomeProblem
-
-
-instance Ppr  SomeProblem where ppr     (SomeProblem p) = ppr p
-instance HTML SomeProblem where toHtml  (SomeProblem p) = toHtml p

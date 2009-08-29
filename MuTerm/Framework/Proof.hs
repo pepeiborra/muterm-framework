@@ -35,7 +35,6 @@ ProofF(..), Proof, Solution (..)
 , success, singleP, andP, stage, dontKnow, failP, mand, mprod
 , runProof, runProofSol, runProofSol', runProofByStages, isSuccess
 
-
 ) where
 
 
@@ -57,6 +56,7 @@ import Data.Traversable as T (Traversable(..), foldMapDefault)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
 
+import Prelude as P
 
 -----------------------------------------------------------------------------
 -- Proof Tree
@@ -256,6 +256,7 @@ evalF (MPlus p1 p2) = case p1 of
                         Nothing -> p2
 evalF MZero         = Nothing
 
+
 -- | We obtain the solution if it exist
 evalSolF :: ProofF (Solution [SomeInfo]) -> Solution [SomeInfo]
 evalSolF Single { procInfo   = procInfo'
@@ -285,6 +286,7 @@ evalSolF Or { procInfo    = procInfo'
           getSol ((YES sol):sols) = YES sol
           getSol ((NO sol):sols)  = NO sol
           getSol (_:sols)         = getSol sols
+
 evalSolF Success { procInfo = procInfo' } = YES [procInfo']
 evalSolF Fail { procInfo = procInfo' }    = NO [procInfo']
 evalSolF DontKnow {}   = MAYBE
@@ -312,7 +314,6 @@ evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
 evalSolF' (Single pi pb p) = (wrap . Single pi pb) `liftM` p
 evalSolF' (Stage  p) = p
 
-
 -- | Evaluate if proof is success
 isSuccess :: Proof a -> Bool
 isSuccess = foldFree (const False) isSuccessF
@@ -332,3 +333,35 @@ runProof p = evaluate p
 -- | Apply the evaluation
 runProofSol :: (Show a) => Proof a -> Solution [SomeInfo]
 runProofSol p = evaluateSol p
+
+-- | Apply the evaluation returning the relevant proof subtree
+runProofSol' :: Proof a -> Solution (Proof ())
+runProofSol' = foldFree (\_ -> MAYBE) evalSolF'
+
+-- | Run the search until a staged node is reached,
+--   then run the staged nodes. This is intended to
+--   simulates breadth-first search when the staged
+--   nodes are expensive.
+runProofByStages :: (MonadFree ProofF proof) => Proof a -> Solution (proof b)
+runProofByStages p = search where
+  -- First turn the proof, i.e. a tree of problems, into a tree of proofs.
+  -- This is done by replacing stage nodes by leafs containing the staged subproof
+  p'     = stageProof p
+  search = do
+  -- Next we define the search, which is done using eval.
+  -- The search returns a mp list of (potentially) succesful proofs, i.e. tree of problems.
+    sol <- foldFree return evalSolF' p'
+    -- we search through these one by one
+    -- WE SHOULD SORT THEM FIRST
+    -- by whether they are a staged proof or not,
+    -- so that we look at the easy wins first.
+    -- Ultimately runProofDirect performs a good old search over every proof,
+    -- regarding any remaining unsolved problem as a failure
+    runProofDirect (sol `asTypeOf` p)
+
+  runProofDirect p = foldFree (const mzero) evalSolF' p `asTypeOf` search
+--  stageProof :: MonadFree ProofF m => ProofC a -> m (m a)
+  stageProof = foldFree (return . return) f where
+    f (Stage p) = return (unstageProof p)
+    f x = wrap x
+    unstageProof = join

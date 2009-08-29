@@ -1,0 +1,4 @@
+This package provides an abstract framework for developing termination tools based on Dependency Pairs.
+It mainly exists to enable the MuTerm and Narradar Termination Tools to reuse and share code.
+
+Consult the LICENSE file for copyright issues.

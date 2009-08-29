@@ -60,6 +60,9 @@ import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
 -- Data
 -----------------------------------------------------------------------------
 
+-- ------------------
+-- Solution datatype
+-- ------------------
 -- | Solution is the result of the evaluation
 data Solution a = YES a
                 | NO  a
@@ -88,6 +91,31 @@ data ProofF k = Single { procInfo :: !(SomeInfo)       -- ^ processor info
 -- | 'Proof' is a Free Monad. We use this monad to obtain some
 -- advantages of monads for free
 type Proof a = Free (ProofF) a
+isNo NO{} = True; isNo _ = False
+isMaybe MAYBE{} = True; isMaybe _ = False
+isYes YES{} = True; isYes _ = False
+
+catYes []               = []
+catYes ((YES sol):sols) = sol:(catYes sols)
+catYes (_:sols)         = catYes sols
+
+mapYes f (YES x) = YES x
+mapYes _ x       = x
+
+-- | Isomorphic to the Maybe monad (return == YES)
+instance Monad Solution where
+  return = YES
+  YES a >>= f = f a
+  NO  a >>= f = f a
+  MAYBE >>= _ = MAYBE
+
+-- | The MonadPlus instance elegantly enforces the priority of NO over YES
+instance MonadPlus Solution where
+  mzero = MAYBE
+  YES a `mplus` NO b = NO b
+  YES a `mplus` _    = YES a
+  NO  a `mplus` _    = NO  a
+  MAYBE `mplus` b    = b
 
 -----------------------------------------------------------------------------
 -- Classes
@@ -221,13 +249,11 @@ evalF MZero         = Nothing
 -- | We obtain the solution if it exist
 evalSolF :: ProofF (Solution [SomeInfo]) -> Solution [SomeInfo]
 evalSolF Single { procInfo   = procInfo'
-                , subProblem = subProblem'} 
-    = case subProblem' of
-        MAYBE   -> MAYBE
-        YES sol -> YES $ procInfo':sol
-        NO  sol -> NO sol
+                , subProblem = subProblem'}
+    = mapYes (procInfo':) subProblem'
+
 evalSolF And { procInfo    = procInfo'
-             , subProblems = subProblems'} 
+             , subProblems = subProblems'}
     = if (or . map isMaybe $ subProblems') then
           MAYBE
       else
@@ -235,28 +261,17 @@ evalSolF And { procInfo    = procInfo'
               head noSubProblems
           else
               YES $ procInfo':(concat . catYes $ subProblems')
-    where isMaybe MAYBE   = True
-          isMaybe (YES _) = False
-          isMaybe (NO  _) = False
-          noSubProblems = filter isNo subProblems'
-          isNo MAYBE   = False
-          isNo (YES _) = False
-          isNo (NO  _) = True
-          catYes []               = []
-          catYes ((YES sol):sols) = sol:(catYes sols)
-          catYes (_:sols)         = catYes sols
+    where noSubProblems = filter isNo subProblems'
+
 evalSolF Or { procInfo    = procInfo'
-            , subProblems = subProblems'} 
+            , subProblems = subProblems'}
     = if (or . map (not . isMaybe) $ subProblems') then
           case getSol subProblems' of
             YES sol -> YES $ procInfo':sol
             NO  sol -> NO sol
       else
           MAYBE
-    where isMaybe MAYBE   = True
-          isMaybe (YES _) = False
-          isMaybe (NO  _) = False
-          -- we ensure that getSol [] never occurs
+    where -- we ensure that getSol [] never occurs
           getSol ((YES sol):sols) = YES sol
           getSol ((NO sol):sols)  = NO sol
           getSol (_:sols)         = getSol sols

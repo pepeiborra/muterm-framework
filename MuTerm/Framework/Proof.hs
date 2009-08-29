@@ -57,8 +57,34 @@ import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
 
 
 -----------------------------------------------------------------------------
--- Data
+-- Proof Tree
 -----------------------------------------------------------------------------
+
+-- | Proof Tree constructors
+data ProofF k =
+    And     {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblems::[k]}
+  | Or      {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblems::[k]}
+  | Single  {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblem::k}
+  | Success {procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
+  | Fail    {procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
+  | DontKnow{procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
+  | Stage k
+  | MPlus k k
+  | MZero
+  | MAnd  k k
+  | MDone
+
+-- | 'Proof' is a Free Monad. We use this monad to obtain some
+-- advantages of monads for free
+type Proof a = Free (ProofF) a
+
+-- | 'SomeInfo' hides the type of the proccesor info
+data SomeInfo where
+    SomeInfo :: ProofInfo p => p -> SomeInfo
+
+instance Show SomeProblem where
+  show _ = "SomeProblem"
+
 
 -- ------------------
 -- Solution datatype
@@ -68,29 +94,6 @@ data Solution a = YES a
                 | NO  a
                 | MAYBE
 
--- | 'SomeInfo' hides the type of the proccesor info
-data SomeInfo where
-    SomeInfo :: ProofInfo p => p -> SomeInfo
-
--- | Possible returning proofs after appliying a processor
-data ProofF k = Single { procInfo :: !(SomeInfo)       -- ^ processor info
-                       , subProblem :: k}              -- ^ subproblem
-              | And { procInfo :: !(SomeInfo)          -- ^ processor info
-                    , subProblems::[k]}                -- ^ list of subproblems
-              | Or {procInfo :: !(SomeInfo)            -- ^ processor info
-                   , subProblems::[k]}                 -- ^ list of subproblems
-              | Success {procInfo :: !(SomeInfo)}      -- ^ processor info
-              | Fail {procInfo :: !(SomeInfo)}         -- ^ processor info
-              | DontKnow
-              | Stage k                                -- ^ using external
-                                                       -- computations
-              | MPlus k k
-              | MZero
-                deriving (Show)
-
--- | 'Proof' is a Free Monad. We use this monad to obtain some
--- advantages of monads for free
-type Proof a = Free (ProofF) a
 isNo NO{} = True; isNo _ = False
 isMaybe MAYBE{} = True; isMaybe _ = False
 isYes YES{} = True; isYes _ = False

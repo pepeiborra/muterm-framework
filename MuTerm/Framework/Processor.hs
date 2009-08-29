@@ -33,5 +33,4 @@ import MuTerm.Framework.Problem
 
 -- | Each processor is an instance of the class 'Processor'. The
 -- output problem depends of the input problem and viceversa
-class (IsDPProblem o, IsDPProblem d) => Processor tag trs o d | tag o -> d, tag d -> o where
-  apply   :: tag -> DPProblem o trs -> Proof (DPProblem d trs)
+  apply       :: tag -> DPProblem o trs -> Proof (DPProblem d trs)

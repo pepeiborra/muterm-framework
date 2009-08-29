@@ -42,25 +42,20 @@ pprProofF = f where
       f Success{..} =
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo $$
-        text ("RESULT: Problem solved succesfully") $$
-        proofTail procInfo
+        text ("RESULT: Problem solved succesfully")
       f Fail{..} =
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo  $$
-        text ("RESULT: Problem could not be solved.") $$
-        proofTail procInfo
+        text ("RESULT: Problem could not be solved.")
       f DontKnow{..} =
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo  $$
-        text ("RESULT: Don't know.") $$
-        proofTail procInfo
-
+        text ("RESULT: Don't know.")
       f (Or proc prob sub) =
         ppr prob $$
         text "PROCESSOR: " <> ppr proc $$
         text ("Problem was translated to " ++ show (length sub) ++ " equivalent problems.") $$
         nest 8 (vcat $ punctuate (text "\n") $ map ppr sub)
-
       f (And proc prob sub)
        | length sub > 1 =
         ppr prob $$
@@ -84,36 +79,11 @@ pprProofF = f where
       f MDone = text "Done"
       f (Stage p) = ppr p
 
-      proofTail :: SomeInfo -> Doc
---      proofTail (SomeInfo (External _ (find isOutputTxt -> Just (OutputTxt (unpack -> txt)))))
---                  = text ("Output: ") <> (vcat . map text . lines) txt
-      proofTail _ = Doc.empty
-
 --------------
 -- HTML
 -------------
 
 instance HTML Doc where toHtml = toHtml . show
---instance HTML a => HTMLTABLE a where cell = cell . toHtml
-{-
-instance (HTML (TRS typ)) => HTML (DPProblem typ) where
-    toHtml (Rewriting trs)      = toHtmlProblem1 "REW" "Direct Rewriting Termination" trs
-    toHtml (DPFProblem trs dps) = toHtmlProblem2 "DP"  "DP Problem"                   trs dps
-    -- TODO add all the relevant instances
-
-toHtmlProblem1 c title trs =
-        H.table ! [H.theclass c] << (
-            H.td ! [H.theclass "problem"] << H.bold << title </>
-            H.td ! [H.theclass "TRS_TITLE" ] << "Rules"</> toTable trs)
-
-toHtmlProblem2 c title trs dps =
-        H.table ! [H.theclass c] << (
-            H.td ! [H.theclass "problem"] << H.bold << title </>
-            H.td ! [H.theclass "TRS_TITLE" ] << "Rules" </> toTable trs </>
-            H.td ! [H.theclass "DPS" ] << "Dependency Pairs" </> toTable dps)
-
-toTable = cell . toHtml
--}
 
 instance (Ppr a, Ord a) => HTML (Proof a) where
    toHtml = foldFree (\prob -> p<<(ppr prob $$ text "RESULT: not solved yet")) work where
@@ -123,14 +93,13 @@ instance (Ppr a, Ord a) => HTML (Proof a) where
        p
         << problem  +++ br +++
            procInfo +++ br +++
-           divyes +++ detailResult procInfo
+           divyes
 
     work Fail{..} =
         p
         << problem  +++ br +++
            procInfo +++ br +++
-           divmaybe +++ detailResult procInfo
---           divmaybe +++ thickbox res << spani "seeproof" << "(see failure)"
+           divmaybe
 
     work Or{..} =
         p
@@ -154,22 +123,12 @@ instance (Ppr a, Ord a) => HTML (Proof a) where
     work Single{..} = p
                     << problem +++ br +++ procInfo +++ br +++ subProblem
 
-    detailResult :: SomeInfo -> Html
---    detailResult (SomeInfo (External _ (find isOutputHtml -> Just (OutputHtml (unpack -> output))))) =
---       thickbox output << spani "seeproof" << "(see proof)"
-    detailResult _ = noHtml
-
 
 divi ident = H.thediv ! [H.theclass ident]
 spani ident = H.thespan ! [H.theclass ident]
 divresult = spani "result" << "RESULT: "
 divyes    = divresult +++ spani "yes" << "YES. "
 divmaybe  = divresult +++ spani "maybe" << "Fail. "
-thickbox thing c | label <- hashHtml thing =
-         thediv ! [H.identifier ("tb"++label), H.thestyle "display:none"] << p << thing +++
-         H.hotlink ("#TB_inline?height=600&width=600&inlineId=tb" ++ label) ! [theclass "thickbox"] << c
-
-hashHtml = show . abs . hashString . H.renderHtml
 
 
 -- ----

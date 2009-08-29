@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -32,8 +32,9 @@ ProofF(..), Proof, Solution (..)
 -- * Exported functions
 , mkDispatcher
 
-, success, singleP, andP, runProof, runProofSol, stage, dontKnow
-, choiceP, failP
+, success, singleP, andP, stage, dontKnow, failP, mand, mprod
+, runProof, runProofSol, runProofSol', runProofByStages, isSuccess
+
 
 ) where
 
@@ -44,6 +45,7 @@ import Control.Applicative((<$>))
 import Control.Monad.Reader (MonadReader (..))
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
 import System.IO.Unsafe (unsafePerformIO)
+import Text.XHtml (HTML(..))
 
 import Control.Applicative
 import Data.DeriveTH
@@ -131,12 +133,7 @@ class IsDPProblem typ => Dispatch typ trs where
     dispatch :: DPProblem typ trs -> Proof ()
 
 -- | Class that show the info of the proofs in the desired format
-class Ppr p => ProofInfo p where
-    showPlain :: p -> String
-    pprPlain  :: p -> Doc
---    showInfo  :: Output -> p -> String
---    showInfo f = case f of
---                   Plain -> showPlain
+class (HTML p, Ppr p) => ProofInfo p where
 
 -----------------------------------------------------------------------------
 -- Instances
@@ -164,43 +161,52 @@ instance Show SomeInfo where
 instance Ppr SomeInfo where
     ppr (SomeInfo p) = ppr p
 
+instance HTML SomeInfo where toHtml (SomeInfo i) = toHtml i
+
 -----------------------------------------------------------------------------
--- Functions
+-- Smart Constructors
 -----------------------------------------------------------------------------
 
 -- | Return a success node
-success :: (ProofInfo p) => p -> Proof b
-success pi = Impure (Success (someInfo pi))
+success :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+success pi p0 = Impure (Success (someInfo pi) (someProblem p0))
 
 -- | Return a fail node
-failP :: (ProofInfo p) => p -> Proof b
-failP pi = Impure (Fail (someInfo pi))
-
--- | Return a new single node
-singleP :: (ProofInfo p) => p -> b -> Proof b
-singleP pi p = Impure (Single (someInfo pi) (return p))
-
--- | Return a list of nodes
-andP :: (ProofInfo p) => p -> [b] -> Proof b
-andP pi [] = success pi
-andP pi pp = Impure (And (someInfo pi) (map return pp))
-
--- | Return a decision among nodes
-orP :: (ProofInfo p) => p -> [b] -> Proof b
-orP pi [] = success pi
-opP pi pp = Impure (Or (someInfo pi) (map return pp))
-
--- | The or version with mplus
-choiceP :: Proof a -> Proof a -> Proof a
-choiceP p1 p2 = Impure (MPlus p1 p2)
+failP :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+failP pi p0 = Impure (Fail (someInfo pi) (someProblem p0))
 
 -- | Returns a don't know node
-dontKnow :: Proof b
-dontKnow = Impure DontKnow
+dontKnow :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+dontKnow pi p0 = Impure (DontKnow (someInfo pi) (someProblem p0))
+
+-- | Return a new single node
+singleP :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> b -> Proof b
+singleP pi p0 p = Impure (Single (someInfo pi) (someProblem p0) (return p))
+
+-- | Return a list of nodes
+andP :: (ProofInfo p, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => p -> DPProblem typ a -> [b] -> Proof b
+andP pi p0 [] = success pi p0
+andP pi p0 pp = Impure (And (someInfo pi) (someProblem p0) (map return pp))
+
+-- | Return a decision among nodes
+orP :: (ProofInfo pi, HTML (DPProblem typ a), Ppr (DPProblem typ a)) => pi -> DPProblem typ a -> [b] -> Proof b
+orP pi p0 [] = success pi p0
+opP pi p0 pp = Impure (Or (someInfo pi) p0 (map return pp))
 
 -- | Returns an extern computation node
 stage :: IO (Proof a) -> Proof a
 stage = unsafePerformIO
+
+mand :: a -> a -> Proof a
+mand a b = Impure (MAnd (return a) (return b))
+
+mprod = P.foldr mand (Impure MDone) . map return where
+  mand a (Impure MDone) = a
+  mand a b = Impure (MAnd a b)
+
+-- ---------
+-- Functions
+-- ---------
 
 -- | Pack the proof information
 someInfo :: ProofInfo p => p -> SomeInfo
@@ -241,9 +247,10 @@ evalF Or { procInfo    = procInfo'
           (Just $ procInfo':(head . catMaybes $ subProblems'))
       else
           Nothing
+
 evalF Success { procInfo = procInfo' } = Just [procInfo']
 evalF Fail {}       = Nothing
-evalF DontKnow      = Nothing
+evalF DontKnow{}    = Nothing
 evalF (MPlus p1 p2) = case p1 of
                         Just _  -> p1
                         Nothing -> p2
@@ -287,7 +294,24 @@ evalSolF (MPlus p1 p2) = case p1 of
                            MAYBE     -> p2
 evalSolF MZero         = MAYBE
 
--- Apply search algorithms
+
+-- | Obtain the solution, collecting the proof path in the way
+evalSolF' :: (MonadFree ProofF proof, MonadPlus mp) => ProofF (mp (proof a)) -> mp (proof a)
+evalSolF' Fail{..}       = mzero -- return (wrap Fail{..})
+evalSolF' DontKnow{}     = mzero
+evalSolF' MZero          = mzero
+evalSolF' MDone          = return (wrap MDone)
+evalSolF' Success{..}    = return (wrap Success{..})
+evalSolF' (MPlus p1 p2)  = p1 `M.mplus` p2
+evalSolF' (And pi pb []) = return (wrap $ Success pi pb)
+evalSolF' (And pi pb ll) = (wrap . And  pi pb) `liftM` P.sequence ll
+evalSolF' (Or  pi pb []) = return (wrap $ Success pi pb)
+evalSolF' (Or  pi pb ll) = (wrap . Single pi pb) `liftM` msum ll
+evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
+                           return (wrap $ MAnd s1 s2)
+evalSolF' (Single pi pb p) = (wrap . Single pi pb) `liftM` p
+evalSolF' (Stage  p) = p
+
 
 -- | Evaluate if proof is success
 isSuccess :: Proof a -> Bool

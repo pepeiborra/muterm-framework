@@ -21,7 +21,8 @@ Library
     MuTerm.Framework.Processor,
     MuTerm.Framework.Proof,
     MuTerm.Framework.Strategy,
-    MuTerm.Framework.Ppr
+    MuTerm.Framework.Ppr,
+    MuTerm.Framework.Output
 
-  build-depends: 	base -any, mtl, control-monad-free -any, containers, pretty
+  build-depends: 	base -any, mtl, control-monad-free -any, containers, pretty, xhtml, derive
   ghc-options:   	-O2 -threaded 

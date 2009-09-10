@@ -31,12 +31,12 @@ import Control.Monad ((>=>), mplus, MonadPlus)
 (f .|. g) m = f m `mplus` g m
 
 -- | And strategy combinator
-(.&.) :: (a -> Proof b) -> (b -> Proof c) -> a -> Proof c
+(.&.) :: Monad mp => (a -> Proof mp b) -> (b -> Proof mp c) -> a -> Proof mp c
 (.&.) = (>=>)
 
 infixl 5 .|.
 infixl 5 .&.
 
 -- | We apply the strategy recursively
-fixSolver :: (a -> Proof a) -> a -> Proof a
+fixSolver :: Monad mp => (a -> Proof mp a) -> a -> Proof mp a
 fixSolver f x = let x' = f x in (x' >>= fixSolver f) -- x' `mplus` (x' >>= fixSolver f)

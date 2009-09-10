@@ -4,6 +4,7 @@
 {-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
@@ -26,14 +27,14 @@ module MuTerm.Framework.Proof (
 ProofF(..), Proof, Solution (..)
 , Dispatch(..)
 
-, ProblemInfo(..), SomeProblem(..), someProblem
-, ProofInfo (..), SomeInfo (..), someInfo
+, ProblemInfo, SomeProblem(..), someProblem
+, ProofInfo, SomeInfo (..), someInfo
 
 -- * Exported functions
 , mkDispatcher
 
-, success, singleP, andP, stage, dontKnow, failP, mand, mprod
-, runProof, runProofSol, runProofSol', runProofByStages, isSuccess
+, success, singleP, andP, dontKnow, failP, mand, mprod
+, isSuccess, runProof -- , runProof, runProofSol', runProofByStages
 
 ) where
 
@@ -63,22 +64,42 @@ import Prelude as P
 -----------------------------------------------------------------------------
 
 -- | Proof Tree constructors
-data ProofF k =
+data ProofF (m :: * -> *) (k :: *) =
     And     {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblems::[k]}
-  | Or      {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblems::[k]}
+  | Or      {procInfo :: !(SomeInfo), problem :: !(SomeProblem), alternatives::m k}
   | Single  {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblem::k}
   | Success {procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
   | Fail    {procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
   | DontKnow{procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
-  | Stage k
-  | MPlus k k
-  | MZero
+  | Search (m k)
   | MAnd  k k
   | MDone
 
--- | 'Proof' is a Free Monad. We use this monad to obtain some
--- advantages of monads for free
-type Proof a = Free (ProofF) a
+-- -------------------
+-- Sebastian's monad
+-- -------------------
+data ProofS m a =
+    PureS a
+  | AndS  [ProofS m a]
+  | LazyS (m (ProofS m a))
+
+type ProofListT a = [ProofS [] a]
+
+instance Monad m => Monad (ProofS m) where
+  return = PureS
+  PureS a >>= f = f a
+  AndS aa >>= f = AndS (P.map (>>=f) aa)
+  LazyS a >>= f = LazyS (liftM (>>= f) a)
+
+runProofS :: MonadPlus m => ProofS m a -> m (ProofS t a)
+runProofS = foldProofS (return . PureS) (liftM AndS . P.sequence) join
+
+foldProofS :: (a -> b) -> ([b] -> b) -> (m b -> b) -> ProofS m a -> b
+foldProofS = undefined
+
+
+-- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
+type Proof m a = Free (ProofF m) a
 
 -- | 'SomeInfo' hides the type of the proccesor info
 data SomeInfo where
@@ -86,10 +107,17 @@ data SomeInfo where
 
 -- | 'SomeProblem' hides the type of the problem
 data SomeProblem where
-    SomeProblem :: (HTML (DPProblem typ a), Ppr (DPProblem typ a), DotRep (DPProblem typ a)) => DPProblem typ a -> SomeProblem
+    SomeProblem :: (HTML p, Ppr p, DotRep p) => p -> SomeProblem
 
 instance Show SomeProblem where
   show _ = "SomeProblem"
+{-
+f :: Proof a -> IO (Proof a)
+f = lift . foldFree g where
+  g (Stage k) = k >>= id
+  g (t :: ProofF (IO (Proof a))) = fmap Impure (sequence t)
+-}
+
 
 
 -- ------------------
@@ -130,11 +158,11 @@ instance MonadPlus Solution where
 -- Classes
 -----------------------------------------------------------------------------
 
-mkDispatcher :: (a -> Proof b) ->  a -> Proof ()
+mkDispatcher :: Monad m => (a -> Proof m b) ->  a -> Proof m ()
 mkDispatcher f = fmap (const ()) . f
 
 class IsDPProblem typ => Dispatch typ trs where
-    dispatch :: DPProblem typ trs -> Proof ()
+    dispatch :: MonadPlus m => DPProblem typ trs -> Proof m ()
 
 -- | Class that show the info of the proofs in the desired format
 class (HTML p, Ppr p, DotRep p) => ProofInfo p
@@ -157,19 +185,36 @@ instance ProofInfo SomeProblem
 -----------------------------------------------------------------------------
 -- Instances
 -----------------------------------------------------------------------------
+$(derive (makeFunctorN 1)     ''Solution)
 
-instance Foldable ProofF where foldMap = T.foldMapDefault
-$(derive makeFunctor     ''Solution)
-$(derive makeFunctor     ''ProofF)
-$(derive makeTraversable ''ProofF)
+instance Monad m => Functor (ProofF m) where
+  fmap f (And pi p kk)   = And pi p (fmap f kk)
+  fmap f (Single pi p k) = Single pi p (f k)
+  fmap _ (Success pi p)  = Success pi p
+  fmap _ (Fail pi p)     = Fail pi p
+  fmap _ (DontKnow pi p) = DontKnow pi p
+  fmap f (Search mk)     = Search (liftM f mk)
+  fmap f (MAnd k1 k2)    = MAnd (f k1) (f k2)
+  fmap f MDone           = MDone
+
+instance (Monad m, Traversable m) => Foldable (ProofF m) where foldMap = T.foldMapDefault
+
+instance (Monad m, Traversable m) => Traversable (ProofF m) where
+  traverse f (And pi p kk)   = And pi p <$> traverse f kk
+  traverse f (Single pi p k) = Single pi p <$> f k
+  traverse _ (Success pi p)  = pure $ Success pi p
+  traverse _ (Fail pi p)     = pure $ Fail pi p
+  traverse _ (DontKnow pi p) = pure $ DontKnow pi p
+  traverse f (Search mk)     = Search <$> traverse f mk
+  traverse f (MAnd k1 k2)    = MAnd <$> f k1 <*> f k2
+  traverse f MDone           = pure MDone
+
 
 -- MonadPlus
 
-instance MonadPlus (Free (ProofF)) where 
-    mzero       = Impure MZero
-    mplus p1 (Impure MZero) = p1
-    mplus p1 p2 = Impure (MPlus p1 p2) 
-                  -- if isSuccess p1 then p1 else choiceP p1 p2
+instance MonadPlus m => MonadPlus (Free (ProofF m)) where
+    mzero       = Impure (Search mzero)
+    mplus p1 p2 = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show
 
@@ -186,38 +231,30 @@ instance Ppr a => HTML   a where toHtml x = toHtml (show $ ppr x)
 -----------------------------------------------------------------------------
 
 -- | Return a success node
-success :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+success :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> Proof m b
 success pi p0 = Impure (Success (someInfo pi) (someProblem p0))
 
 -- | Return a fail node
-failP :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+failP :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> Proof m b
 failP pi p0 = Impure (Fail (someInfo pi) (someProblem p0))
 
 -- | Returns a don't know node
-dontKnow :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> Proof b
+dontKnow :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> Proof m b
 dontKnow pi p0 = Impure (DontKnow (someInfo pi) (someProblem p0))
 
 -- | Return a new single node
-singleP :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> b -> Proof b
+singleP :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> b -> Proof m b
 singleP pi p0 p = Impure (Single (someInfo pi) (someProblem p0) (return p))
 
 -- | Return a list of nodes
-andP :: (ProofInfo p, ProblemInfo (DPProblem typ a)) => p -> DPProblem typ a -> [b] -> Proof b
+andP :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> [b] -> Proof m b
 andP pi p0 [] = success pi p0
 andP pi p0 pp = Impure (And (someInfo pi) (someProblem p0) (map return pp))
 
--- | Return a decision among nodes
-orP :: (ProofInfo pi, ProblemInfo (DPProblem typ a)) => pi -> DPProblem typ a -> [b] -> Proof b
-orP pi p0 [] = success pi p0
-opP pi p0 pp = Impure (Or (someInfo pi) p0 (map return pp))
-
--- | Returns an extern computation node
-stage :: IO (Proof a) -> Proof a
-stage = unsafePerformIO
-
-mand :: a -> a -> Proof a
+mand :: Monad m => a -> a -> Proof m a
 mand a b = Impure (MAnd (return a) (return b))
 
+mprod :: Monad m => [a] -> Proof m a
 mprod = P.foldr mand (Impure MDone) . map return where
   mand a (Impure MDone) = a
   mand a b = Impure (MAnd a b)
@@ -231,9 +268,10 @@ someInfo :: ProofInfo p => p -> SomeInfo
 someInfo = SomeInfo
 
 -- | Pack the problem
-someProblem :: (ProblemInfo (DPProblem typ a)) => DPProblem typ a -> SomeProblem
+someProblem :: ProblemInfo p => p -> SomeProblem
 someProblem = SomeProblem
 
+{-
 -- | We obtain if the proof is a solution
 isSuccessF :: ProofF Bool -> Bool
 isSuccessF Single { procInfo    = SomeInfo procInfo'
@@ -246,8 +284,6 @@ isSuccessF Or { subProblems = subProblems'}
 isSuccessF Success {}    = True
 isSuccessF Fail {}       = False
 isSuccessF DontKnow {}   = False
-isSuccessF (MPlus p1 p2) = p1 || p2
-isSuccessF MZero         = False
 
 -- | We obtain the solution if it exist
 --evalF :: MonadCont m => ProofF (Maybe [SomeInfo]) -> m (Maybe [SomeInfo])
@@ -273,10 +309,6 @@ evalF Or { procInfo    = procInfo'
 evalF Success { procInfo = procInfo' } = Just [procInfo']
 evalF Fail {}       = Nothing
 evalF DontKnow{}    = Nothing
-evalF (MPlus p1 p2) = case p1 of
-                        Just _  -> p1
-                        Nothing -> p2
-evalF MZero         = Nothing
 
 
 -- | We obtain the solution if it exist
@@ -312,78 +344,43 @@ evalSolF Or { procInfo    = procInfo'
 evalSolF Success { procInfo = procInfo' } = YES [procInfo']
 evalSolF Fail { procInfo = procInfo' }    = NO [procInfo']
 evalSolF DontKnow {}   = MAYBE
-evalSolF (MPlus p1 p2) = case p1 of
-                           YES _     -> p1
-                           NO  _     -> p1
-                           MAYBE     -> p2
-evalSolF MZero         = MAYBE
-
+-}
 
 -- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadFree ProofF proof, MonadPlus mp) => ProofF (mp (proof a)) -> mp (proof a)
+evalSolF' :: (MonadPlus mp) => ProofF mp (mp(Proof t a)) -> mp (Proof t a)
 evalSolF' Fail{..}       = mzero -- return (wrap Fail{..})
 evalSolF' DontKnow{}     = mzero
-evalSolF' MZero          = mzero
-evalSolF' MDone          = return (wrap MDone)
-evalSolF' Success{..}    = return (wrap Success{..})
-evalSolF' (MPlus p1 p2)  = p1 `M.mplus` p2
-evalSolF' (And pi pb []) = return (wrap $ Success pi pb)
-evalSolF' (And pi pb ll) = (wrap . And  pi pb) `liftM` P.sequence ll
-evalSolF' (Or  pi pb []) = return (wrap $ Success pi pb)
-evalSolF' (Or  pi pb ll) = (wrap . Single pi pb) `liftM` msum ll
+evalSolF' MDone          = return (Impure MDone)
+evalSolF' Success{..}    = return (Impure Success{..})
+evalSolF' (Search mk)    = join mk
+evalSolF' (And pi pb []) = return (Impure $ Success pi pb)
+evalSolF' (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
+evalSolF' (Or  pi pb ll) = (Impure . Single pi pb) `liftM` join ll
 evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
-                           return (wrap $ MAnd s1 s2)
-evalSolF' (Single pi pb p) = (wrap . Single pi pb) `liftM` p
-evalSolF' (Stage  p) = p
+                           return (Impure $ MAnd s1 s2)
+evalSolF' (Single pi pb p) = (Impure . Single pi pb) `liftM` p
+
 
 -- | Evaluate if proof is success
-isSuccess :: Proof a -> Bool
-isSuccess = foldFree (const False) isSuccessF
-
+isSuccess :: Proof Maybe a -> Bool
+isSuccess = isJust . foldFree (const Nothing) evalSolF'
+{-
 -- | Evaluate the proof
-evaluate :: Proof a -> Maybe [SomeInfo]
+evaluate :: Proof m a -> Maybe [SomeInfo]
 evaluate = foldFree (\_ -> Nothing) evalF
 
 -- | Evaluate the proof controlling non-termination
-evaluateSol :: Proof a -> Solution [SomeInfo]
+evaluateSol :: Proof m a -> Solution [SomeInfo]
 evaluateSol = foldFree (\_ -> MAYBE) evalSolF
 
 -- | Apply the evaluation
-runProof :: (Show a) => Proof a -> Maybe [SomeInfo]
+runProof :: (Show a) => Proof m a -> Maybe [SomeInfo]
 runProof p = evaluate p
 
 -- | Apply the evaluation
-runProofSol :: (Show a) => Proof a -> Solution [SomeInfo]
+runProofSol :: (Show a) => Proof m a -> Solution [SomeInfo]
 runProofSol p = evaluateSol p
-
+-}
 -- | Apply the evaluation returning the relevant proof subtree
-runProofSol' :: Proof a -> Solution (Proof ())
-runProofSol' = foldFree (\_ -> MAYBE) evalSolF'
-
--- | Run the search until a staged node is reached,
---   then run the staged nodes. This is intended to
---   simulates breadth-first search when the staged
---   nodes are expensive.
-runProofByStages :: (MonadFree ProofF proof) => Proof a -> Solution (proof b)
-runProofByStages p = search where
-  -- First turn the proof, i.e. a tree of problems, into a tree of proofs.
-  -- This is done by replacing stage nodes by leafs containing the staged subproof
-  p'     = stageProof p
-  search = do
-  -- Next we define the search, which is done using eval.
-  -- The search returns a mp list of (potentially) succesful proofs, i.e. tree of problems.
-    sol <- foldFree return evalSolF' p'
-    -- we search through these one by one
-    -- WE SHOULD SORT THEM FIRST
-    -- by whether they are a staged proof or not,
-    -- so that we look at the easy wins first.
-    -- Ultimately runProofDirect performs a good old search over every proof,
-    -- regarding any remaining unsolved problem as a failure
-    runProofDirect (sol `asTypeOf` p)
-
-  runProofDirect p = foldFree (const mzero) evalSolF' p `asTypeOf` search
---  stageProof :: MonadFree ProofF m => ProofC a -> m (m a)
-  stageProof = foldFree (return . return) f where
-    f (Stage p) = return (unstageProof p)
-    f x = wrap x
-    unstageProof = join
+runProof :: MonadPlus mp => Proof mp a -> mp (Proof m ())
+runProof = foldFree (const mzero) evalSolF'

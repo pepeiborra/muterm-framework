@@ -62,11 +62,10 @@ gs = repG . dotSimple
 -- GraphViz logs
 -- ----------------------------
 sliceWorkDone p = foldFree return (Impure . f) p where
-    f (Or  p pi pp) = (Or  p pi $ takeWhileAndOneMore (not . isSuccess) pp)
+    f (Or  p pi pp) = Or  p pi (pp >>= \p -> guard (not $ isSuccess p) >> return p)
     f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
 --    f (MPlusPar p1 p2) = if isSuccess p1 then Stage p1 else (MPlusPar p1 p2)  -- We use stage in lieu of return here
-    f (MPlus    p1 p2) = if isSuccess p1      then Stage p1 else (MPlus    p1 p2)
-    f (MAnd     p1 p2) = if not(isSuccess p1) then Stage p1 else (MAnd p1 p2)
+    f (MAnd     p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
     f x = x
     takeWhileAndOneMore _ []     = []
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
@@ -85,7 +84,6 @@ dotProof' DotProof{..} p = showDot $ do
  where
    f (Annotated done Success{..}) = colorJoin done [g problem, g procInfo, textNode (text "YES") [Color $ mkColor "#29431C"]]
    f (Annotated done Fail{..})    = colorJoin done [g problem, g procInfo, textNode (text "NO")  [Color $ mkColor "#60233E"]]
-   f (Annotated _ MZero{})        = mempty
    f (Annotated _ MDone{})        = mempty
    f (Annotated done DontKnow{..})= colorJoin done [g procInfo, textNode (text "Don't Know") []]
    f (Annotated done (MAnd p1 p2))= do
@@ -95,7 +93,6 @@ dotProof' DotProof{..} p = showDot $ do
         return (mkClusterNode cme <$> node)
 
 
-   f (Annotated done (MPlus p1 p2)) = colorJoin done [node [Shape PointShape, label Ppr.empty]] ->> (p1 ||| p2)
    f (Annotated done And{subProblems=[p], ..}) = f (Annotated done Single{subProblem = p, ..})
    f (Annotated done And{..}) = do
         let trs = if (done || showFailedPaths) then g problem else return EmptyNode
@@ -107,7 +104,6 @@ dotProof' DotProof{..} p = showDot $ do
    f (Annotated done Single{..})
       | done || showFailedPaths = colorJoin done [g problem, g procInfo] ->> subProblem
       | otherwise               = colorJoin done [g procInfo] ->> subProblem
-   f (Annotated _ (Stage p)) = p
 
 
 colorJoin True  = foldMap (liftM (ParamJoin [Color $ mkColor "green"]))

@@ -3,6 +3,7 @@
 {-# LANGUAGE PatternGuards, ViewPatterns #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 -----------------------------------------------------------------------------
 -- |
@@ -36,9 +37,8 @@ import MuTerm.Framework.Proof
 -- Text
 -- ----
 
-instance (Ppr a) => Ppr (ProofF a) where ppr = pprProofF
+instance (Ppr a) => Ppr (ProofF mp a) where ppr = pprProofF
 pprProofF = f where
-      f MZero = empty -- text "don't know"
       f Success{..} =
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo $$
@@ -51,11 +51,13 @@ pprProofF = f where
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo  $$
         text ("RESULT: Don't know.")
+{-
       f (Or proc prob sub) =
         ppr prob $$
         text "PROCESSOR: " <> ppr proc $$
         text ("Problem was translated to " ++ show (length sub) ++ " equivalent problems.") $$
         nest 8 (vcat $ punctuate (text "\n") $ map ppr sub)
+-}
       f (And proc prob sub)
        | length sub > 1 =
         ppr prob $$
@@ -70,14 +72,10 @@ pprProofF = f where
         ppr problem $$
         text "PROCESSOR: " <> ppr procInfo $$
         nest 8 (ppr subProblem)
-      f (MPlus p1 p2) =
-        text ("There is a choice.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map ppr [p1,p2])
       f (MAnd p1 p2) =
         text ("Problem was divided in 2 subproblems.") $$
         nest 8 (vcat $ punctuate (text "\n") $ map ppr [p1,p2])
       f MDone = text "Done"
-      f (Stage p) = ppr p
 
 --------------
 -- HTML
@@ -85,9 +83,11 @@ pprProofF = f where
 
 instance HTML Doc where toHtml = toHtml . show
 
-instance (Ppr a, Ord a) => HTML (Proof a) where
+data Unit1 a
+instance Monad Unit1
+
+instance (Ppr a, Ord a) => HTML (Proof Unit1 a) where
    toHtml = foldFree (\prob -> p<<(ppr prob $$ text "RESULT: not solved yet")) work where
-    work MZero       = toHtml  "Don't know"
     work DontKnow{}  = toHtml  "Don't know"
     work Success{..} =
        p
@@ -100,14 +100,14 @@ instance (Ppr a, Ord a) => HTML (Proof a) where
         << problem  +++ br +++
            procInfo +++ br +++
            divmaybe
-
+{-
     work Or{..} =
         p
         << problem +++ br +++
            procInfo +++ br +++
-           "Problem was translated to " +++ show(length subProblems) +++ " equivalent alternatives" +++ br +++
-           unordList subProblems
-
+           "Problem was translated to " +++ show(length alternatives) +++ " equivalent alternatives" +++ br +++
+           unordList alternatives
+-}
     work (And proc prob sub) =
         p
         << prob +++ br +++
@@ -118,8 +118,6 @@ instance (Ppr a, Ord a) => HTML (Proof a) where
         p
         << unordList [p1,p2]
     work MDone = noHtml -- toHtml "RESULT: D"
-    work (MPlus    _ p2)  = p2 -- If we see the choice after simplifying, it means that none was successful
-    work (Stage p)= p
     work Single{..} = p
                     << problem +++ br +++ procInfo +++ br +++ subProblem
 

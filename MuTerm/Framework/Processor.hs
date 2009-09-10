@@ -35,7 +35,8 @@ import MuTerm.Framework.Problem
 -- | Each processor is an instance of the class 'Processor'. The
 -- output problem depends of the input problem and viceversa
 class (IsDPProblem o, IsDPProblem d) => Processor tag trs o d | tag o -> d where
-  apply       :: tag -> DPProblem o trs -> Proof (DPProblem d trs)
-  applySearch :: tag -> DPProblem o trs -> [Proof (DPProblem d trs)]
+  apply       :: MonadPlus mp => tag -> DPProblem o trs -> Proof mp (DPProblem d trs)
+  applySearch :: MonadPlus mp => tag -> DPProblem o trs -> [Proof mp (DPProblem d trs)]
+
   apply       tag p = msum (applySearch tag p)
   applySearch tag p = [apply tag p]

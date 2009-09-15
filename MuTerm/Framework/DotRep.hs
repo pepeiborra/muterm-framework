@@ -3,15 +3,15 @@
 -- Module      :  MuTerm.Framework.DotRep
 -- Copyright   :  (c) muterm development team
 -- License     :  see LICENSE
--- 
--- Maintainer  :  rgutierrez@dsic.upv.es
+--
+-- Maintainer  :  jiborra@dsic.upv.es
 -- Stability   :  unstable
--- Portability :  non-portable 
+-- Portability :  non-portable
 --
 --
 -----------------------------------------------------------------------------
 
-module MuTerm.Framework.DotRep 
+module MuTerm.Framework.DotRep
     ( module MuTerm.Framework.DotRep,
       module Data.GraphViz.Attributes) where
 
@@ -19,7 +19,7 @@ import qualified Data.Graph
 import Data.GraphViz.Attributes
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Tree
-import MuTerm.Framework.Ppr
+import Text.PrettyPrint.HughesPJClass
 
 class DotRep a where
    dot, dotSimple :: a -> DotGr
@@ -32,7 +32,7 @@ data DotGrF a = Text Doc [Attribute]
                       , attributes :: [Attribute]
                       , incoming, outgoing :: Node}
 
-defaultDot x = Text (ppr x) []
+defaultDot x = Text (pPrint x) []
 
 mkColor x = [ColorName x]
 label l = Label (StrLabel ('\"' : renderDot l ++ "\""))

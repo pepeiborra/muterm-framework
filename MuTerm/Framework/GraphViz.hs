@@ -46,11 +46,11 @@ import Data.Graph.Inductive.Tree
 import Data.GraphViz.Attributes
 import qualified Text.Dot
 import Text.Dot hiding (node, edge, attribute)
+import Text.PrettyPrint.HughesPJClass (text)
 
 import Prelude hiding (unlines)
 
 import MuTerm.Framework.DotRep
-import MuTerm.Framework.Ppr as Ppr
 import MuTerm.Framework.Proof
 import MuTerm.Framework.Problem
 

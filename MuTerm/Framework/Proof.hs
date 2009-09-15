@@ -44,6 +44,7 @@ import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
 import Control.Applicative((<$>))
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
 import System.IO.Unsafe (unsafePerformIO)
+import Text.PrettyPrint.HughesPJClass
 import Text.XHtml (HTML(..))
 
 import Control.Applicative
@@ -54,7 +55,6 @@ import Data.Foldable (Foldable(..))
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 
 import MuTerm.Framework.Problem
-import MuTerm.Framework.Ppr (Ppr(..), text, (<+>), Doc)
 import MuTerm.Framework.DotRep
 
 import Prelude as P
@@ -107,7 +107,7 @@ data SomeInfo where
 
 -- | 'SomeProblem' hides the type of the problem
 data SomeProblem where
-    SomeProblem :: (HTML p, Ppr p, DotRep p) => p -> SomeProblem
+    SomeProblem :: (HTML p, Pretty p, DotRep p) => p -> SomeProblem
 
 instance Show SomeProblem where
   show _ = "SomeProblem"
@@ -165,13 +165,13 @@ class IsDPProblem typ => Dispatch typ trs where
     dispatch :: MonadPlus m => DPProblem typ trs -> Proof m ()
 
 -- | Class that show the info of the proofs in the desired format
-class (HTML p, Ppr p, DotRep p) => ProofInfo p
-class (HTML p, Ppr p, DotRep p) => ProblemInfo p
+class (HTML p, Pretty p, DotRep p) => ProofInfo p
+class (HTML p, Pretty p, DotRep p) => ProblemInfo p
 
-instance (HTML (DPProblem typ trs), Ppr (DPProblem typ trs), DotRep (DPProblem typ trs)) => ProblemInfo (DPProblem typ trs)
+instance (HTML (DPProblem typ trs), Pretty (DPProblem typ trs), DotRep (DPProblem typ trs)) => ProblemInfo (DPProblem typ trs)
 
-instance Ppr SomeInfo where ppr (SomeInfo p) = ppr p
-instance Ppr  SomeProblem where ppr (SomeProblem p) = ppr p
+instance Pretty SomeInfo where pPrint (SomeInfo p) = pPrint p
+instance Pretty  SomeProblem where pPrint (SomeProblem p) = pPrint p
 
 instance HTML SomeInfo where toHtml (SomeInfo i) = toHtml i
 instance HTML SomeProblem where toHtml  (SomeProblem p) = toHtml p
@@ -219,12 +219,12 @@ instance MonadPlus m => MonadPlus (Free (ProofF m)) where
 -- Show
 
 instance Show SomeInfo where
-    show (SomeInfo p) = show (ppr p)
+    show (SomeInfo p) = show (pPrint p)
 
 -- Default 'bogus' Instances of Representation classes
 
-instance Ppr a => DotRep a where dot    x = Text (ppr x) []
-instance Ppr a => HTML   a where toHtml x = toHtml (show $ ppr x)
+instance Pretty a => DotRep a where dot    x = Text (pPrint x) []
+instance Pretty a => HTML   a where toHtml x = toHtml (show $ pPrint x)
 
 -----------------------------------------------------------------------------
 -- Smart Constructors

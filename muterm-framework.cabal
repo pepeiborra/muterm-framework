@@ -21,10 +21,9 @@ Library
     MuTerm.Framework.Processor,
     MuTerm.Framework.Proof,
     MuTerm.Framework.Strategy,
-    MuTerm.Framework.Ppr,
     MuTerm.Framework.DotRep,
     MuTerm.Framework.Output,
     MuTerm.Framework.GraphViz
 
-  build-depends: 	base -any, control-monad-free -any, containers, pretty, xhtml, derive, fgl, graphviz, dotgen == 0.3.1
+  build-depends: 	base -any, control-monad-free -any, containers, prettyclass, xhtml, derive, fgl, graphviz, dotgen == 0.3.1
   ghc-options:   	-O2 -threaded 

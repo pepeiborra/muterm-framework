@@ -26,7 +26,7 @@ module MuTerm.Framework.Ppr (
 
 ) where
 
-import Text.PrettyPrint.HughesPJ as Ppr -- (Doc, text, (<+>), int, comma, brackets, hsep, parens, punctuate, char, (<>), hcat, empty)
+import Text.PrettyPrint.HughesPJClass as Ppr -- (Doc, text, (<+>), int, comma, brackets, hsep, parens, punctuate, char, (<>), hcat, empty)
 
 -----------------------------------------------------------------------------
 -- Classes

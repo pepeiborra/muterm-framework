@@ -29,7 +29,7 @@ import qualified Text.XHtml as H
 import Text.XHtml hiding (text)
 
 import MuTerm.Framework.DotRep
-import MuTerm.Framework.Ppr as Doc hiding (Style)
+import Text.PrettyPrint.HughesPJClass as Doc hiding (Style)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Proof
 
@@ -37,44 +37,44 @@ import MuTerm.Framework.Proof
 -- Text
 -- ----
 
-instance (Ppr a) => Ppr (ProofF mp a) where ppr = pprProofF
+instance Pretty a => Pretty (ProofF mp a) where pPrint = pprProofF
 pprProofF = f where
       f Success{..} =
-        ppr problem $$
-        text "PROCESSOR: " <> ppr procInfo $$
+        pPrint problem $$
+        text "PROCESSOR: " <> pPrint procInfo $$
         text ("RESULT: Problem solved succesfully")
       f Fail{..} =
-        ppr problem $$
-        text "PROCESSOR: " <> ppr procInfo  $$
+        pPrint problem $$
+        text "PROCESSOR: " <> pPrint procInfo  $$
         text ("RESULT: Problem could not be solved.")
       f DontKnow{..} =
-        ppr problem $$
-        text "PROCESSOR: " <> ppr procInfo  $$
+        pPrint problem $$
+        text "PROCESSOR: " <> pPrint procInfo  $$
         text ("RESULT: Don't know.")
 {-
       f (Or proc prob sub) =
-        ppr prob $$
-        text "PROCESSOR: " <> ppr proc $$
+        pPrint prob $$
+        text "PROCESSOR: " <> pPrint proc $$
         text ("Problem was translated to " ++ show (length sub) ++ " equivalent problems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map ppr sub)
+        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
 -}
       f (And proc prob sub)
        | length sub > 1 =
-        ppr prob $$
-        text "PROCESSOR: " <> ppr proc $$
+        pPrint prob $$
+        text "PROCESSOR: " <> pPrint proc $$
         text ("Problem was divided in " ++ show (length sub) ++ " subproblems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map ppr sub)
+        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
        | otherwise =
-        ppr prob $$
-        text "PROCESSOR: " <> ppr proc $$
-        nest 8 (vcat $ punctuate (text "\n") $ map ppr sub)
+        pPrint prob $$
+        text "PROCESSOR: " <> pPrint proc $$
+        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
       f (Single{..}) =
-        ppr problem $$
-        text "PROCESSOR: " <> ppr procInfo $$
-        nest 8 (ppr subProblem)
+        pPrint problem $$
+        text "PROCESSOR: " <> pPrint procInfo $$
+        nest 8 (pPrint subProblem)
       f (MAnd p1 p2) =
         text ("Problem was divided in 2 subproblems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map ppr [p1,p2])
+        nest 8 (vcat $ punctuate (text "\n") $ map pPrint [p1,p2])
       f MDone = text "Done"
 
 --------------
@@ -86,8 +86,8 @@ instance HTML Doc where toHtml = toHtml . show
 data Unit1 a
 instance Monad Unit1
 
-instance (Ppr a, Ord a) => HTML (Proof Unit1 a) where
-   toHtml = foldFree (\prob -> p<<(ppr prob $$ text "RESULT: not solved yet")) work where
+instance (Pretty a, Ord a) => HTML (Proof Unit1 a) where
+   toHtml = foldFree (\prob -> p<<(pPrint prob $$ text "RESULT: not solved yet")) work where
     work DontKnow{}  = toHtml  "Don't know"
     work Success{..} =
        p
@@ -133,7 +133,7 @@ divmaybe  = divresult +++ spani "maybe" << "Fail. "
 -- Dot
 -- ----
 
-instance (IsDPProblem typ, Ppr rules) => DotRep (DPProblem typ [rules]) where
+instance (IsDPProblem typ, Pretty rules) => DotRep (DPProblem typ [rules]) where
   dot p = Text rep atts where
     atts = [ Shape BoxShape
            , Style (Stl Bold Nothing)
@@ -142,8 +142,8 @@ instance (IsDPProblem typ, Ppr rules) => DotRep (DPProblem typ [rules]) where
            , Margin (PVal (PointD 0.2 0.2))]
     rep = vcat
      [parens( text "PAIRS" $$
-             nest 1 (vcat $ map ppr (getP p)))
+             nest 1 (vcat $ map pPrint (getP p)))
      ,parens( text "RULES" $$
-             nest 1 (vcat $ map ppr (getR p)))
+             nest 1 (vcat $ map pPrint (getR p)))
      ]
 

@@ -10,10 +10,10 @@
 -- Module      :  MuTerm.Framework.Output
 -- Copyright   :  (c) muterm development team
 -- License     :  see LICENSE
--- 
+--
 -- Maintainer  :  jiborra@dsic.upv.es
 -- Stability   :  unstable
--- Portability :  non-portable 
+-- Portability :  non-portable
 --
 -- This module contains the proof functor.
 --

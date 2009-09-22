@@ -29,6 +29,7 @@ ProofF(..), Proof, Solution (..)
 
 , ProblemInfo, SomeProblem(..), someProblem
 , ProofInfo, SomeInfo (..), someInfo
+, IsMZero(..)
 
 -- * Exported functions
 , mkDispatcher
@@ -51,7 +52,7 @@ import Control.Applicative
 import Data.DeriveTH
 import Data.Derive.Functor
 import Data.Derive.Traversable
-import Data.Foldable (Foldable(..))
+import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 
 import MuTerm.Framework.Problem
@@ -347,7 +348,7 @@ evalSolF DontKnow {}   = MAYBE
 -}
 
 -- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadPlus mp) => ProofF mp (mp(Proof t a)) -> mp (Proof t a)
+evalSolF' :: (MonadPlus mp) => ProofF mp (mp(Proof t ())) -> mp (Proof t ())
 evalSolF' Fail{..}       = mzero -- return (wrap Fail{..})
 evalSolF' DontKnow{}     = mzero
 evalSolF' MDone          = return (Impure MDone)
@@ -361,9 +362,13 @@ evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
 evalSolF' (Single pi pb p) = (Impure . Single pi pb) `liftM` p
 
 
+class MonadPlus mp => IsMZero mp where isMZero :: mp a -> Bool
+instance IsMZero []    where isMZero = null
+instance IsMZero Maybe where isMZero = isNothing
+
 -- | Evaluate if proof is success
-isSuccess :: Proof Maybe a -> Bool
-isSuccess = isJust . foldFree (const Nothing) evalSolF'
+isSuccess :: IsMZero mp => Proof mp a -> Bool
+isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
 {-
 -- | Evaluate the proof
 evaluate :: Proof m a -> Maybe [SomeInfo]

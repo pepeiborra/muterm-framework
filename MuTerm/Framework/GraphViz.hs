@@ -30,7 +30,7 @@ import Control.Monad.Free
 import Data.DeriveTH
 import Data.Derive.Functor
 import Data.Derive.Traversable
-import Data.Foldable (Foldable(..))
+import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(traverse))
 import qualified Data.Traversable as T
 
@@ -61,10 +61,10 @@ gs = repG . dotSimple
 -- ----------------------------
 -- GraphViz logs
 -- ----------------------------
-sliceWorkDone p = foldFree return (Impure . f) p where
+sliceWorkDone :: IsMZero mp => Proof mp a -> Proof mp a
+sliceWorkDone = foldFree return (Impure . f) where
     f (Or  p pi pp) = Or  p pi (pp >>= \p -> guard (not $ isSuccess p) >> return p)
     f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
---    f (MPlusPar p1 p2) = if isSuccess p1 then Stage p1 else (MPlusPar p1 p2)  -- We use stage in lieu of return here
     f (MAnd     p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
     f x = x
     takeWhileAndOneMore _ []     = []
@@ -73,13 +73,12 @@ sliceWorkDone p = foldFree return (Impure . f) p where
 data DotProof = DotProof { showFailedPaths :: Bool }
 dotProof = dotProof' DotProof{showFailedPaths=False}
 
---dotProof' :: DotProof -> Proof a -> DotGr
+dotProof' :: (IsMZero mp, Foldable mp) => DotProof -> Proof mp a -> String
 dotProof' DotProof{..} p = showDot $ do
                              attribute (Size (Point 100 100))
                              attribute (Compound True)
                              foldFree (\_ -> colorJoin False [textNode (text "?") []]) f
                               $ annotate (const False) isSuccess
-                              $ sliceWorkDone
                               $ p
  where
    f (Annotated done Success{..}) = colorJoin done [g problem, g procInfo, textNode (text "YES") [Color $ mkColor "#29431C"]]
@@ -105,6 +104,9 @@ dotProof' DotProof{..} p = showDot $ do
       | done || showFailedPaths = colorJoin done [g problem, g procInfo] ->> subProblem
       | otherwise               = colorJoin done [g procInfo] ->> subProblem
 
+   f (Annotated done (Search mk))
+      | done || showFailedPaths = colorJoin done [] ->> allPar (toList mk)
+      | otherwise = mempty
 
 colorJoin True  = foldMap (liftM (ParamJoin [Color $ mkColor "green"]))
 colorJoin False = foldMap (liftM (ParamJoin [Color $ mkColor "red"]))
@@ -140,7 +142,21 @@ data DotNode = EmptyNode
 
   deriving Show
 
-mkClusterNode c (DotNode a b) = ClusterNode c a b
+inId' DotNode{..} = inId
+inId' ClusterNode{..} = inId
+inId' (CompoundNode n1 _) = inId' n1
+inId' (ParNodes nn) = error "inId' - unexpected: ParNodes"
+
+outId' DotNode{..} = outId
+outId' ClusterNode{..} = outId
+outId' (CompoundNode _ n2) = outId' n2
+outId' (ParNodes nn) = outId' (head nn)
+--outId' (ParNodes nn) = error "outId' - unexpected: ParNodes"
+
+mkClusterNode c DotNode{..} = ClusterNode{clusterId=c,..}
+mkClusterNode c ClusterNode{..} = ClusterNode{clusterId=c,..}
+mkClusterNode c (CompoundNode n1 n2) = ClusterNode{clusterId=c, inId = inId' n1, outId = outId' n2}
+mkClusterNode c other = error ("mkClusterNode: " ++ show other)
 
 instance Monoid (Dot DotNode) where
   mempty  = return EmptyNode
@@ -156,9 +172,11 @@ joinNodes atts (DotNode a b) (DotNode c d)
 joinNodes atts n1 n2@(ParNodes nn)
     = do {mapM_ (joinNodes atts n1) nn ; return $ CompoundNode n1 n2}
 joinNodes atts n1@(DotNode a b) n2@(ClusterNode c d cId)
-    = do {edge b c (LHead (show cId) : LTail (show cId) : atts); return (compoundNode n1 n2)}
+    = do {edge b c (LHead (show cId) : atts); return (compoundNode n1 n2)}
 joinNodes atts n1@(ClusterNode a b cId) n2@(DotNode c d)
-    = do {edge b c (LHead (show cId) : LTail (show cId) : atts); return (compoundNode n1 n2)}
+    = do {edge b c (LTail (show cId) : atts); return (compoundNode n1 n2)}
+joinNodes atts n1@(ClusterNode a b cId) n2@(ClusterNode c d cId')
+    = do {edge b c (LHead (show cId') : LTail (show cId) : atts); return (compoundNode n1 n2)}
 joinNodes atts (CompoundNode n1 n2) n3
     = do {n2' <- joinNodes atts n2 n3; return (compoundNode n1 n2')}
 joinNodes atts n1 (CompoundNode n2 n3)

@@ -25,15 +25,12 @@ module MuTerm.Framework.Proof (
 -- * Exported data
 
 ProofF(..), Proof, Solution (..)
-, Dispatch(..)
 
 , ProblemInfo, SomeProblem(..), someProblem
 , ProofInfo, SomeInfo (..), someInfo
 , IsMZero(..)
 
 -- * Exported functions
-, mkDispatcher
-
 , success, singleP, andP, dontKnow, failP, mand, mprod
 , isSuccess, runProof -- , runProof, runProofSol', runProofByStages
 
@@ -158,12 +155,6 @@ instance MonadPlus Solution where
 -----------------------------------------------------------------------------
 -- Classes
 -----------------------------------------------------------------------------
-
-mkDispatcher :: Monad m => (a -> Proof m b) ->  a -> Proof m ()
-mkDispatcher f = fmap (const ()) . f
-
-class IsDPProblem typ => Dispatch typ trs where
-    dispatch :: MonadPlus m => DPProblem typ trs -> Proof m ()
 
 -- | Class that show the info of the proofs in the desired format
 class (HTML p, Pretty p, DotRep p) => ProofInfo p

@@ -22,6 +22,7 @@
 module MuTerm.Framework.Output where
 
 import Control.Monad.Free
+import Data.Foldable (Foldable, toList)
 import Data.List
 import Data.HashTable (hashString)
 
@@ -37,7 +38,7 @@ import MuTerm.Framework.Proof
 -- Text
 -- ----
 
-instance Pretty a => Pretty (ProofF mp a) where pPrint = pprProofF
+instance (Foldable mp, Pretty a) => Pretty (ProofF mp a) where pPrint = pprProofF
 pprProofF = f where
       f Success{..} =
         pPrint problem $$
@@ -76,6 +77,7 @@ pprProofF = f where
         text ("Problem was divided in 2 subproblems.") $$
         nest 8 (vcat $ punctuate (text "\n") $ map pPrint [p1,p2])
       f MDone = text "Done"
+      f (Search sub) =  vcat (intersperse (text "Trying something different") $ map pPrint $ toList sub)
 
 --------------
 -- HTML

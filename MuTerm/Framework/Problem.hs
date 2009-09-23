@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GADTs #-}
 -----------------------------------------------------------------------------
 -- |
@@ -15,7 +16,7 @@
 --
 -----------------------------------------------------------------------------
 
-module MuTerm.Framework.Problem (  IsDPProblem (..)  ) where
+module MuTerm.Framework.Problem ( IsDPProblem(..), MkDPProblem(..) ) where
 
 
 -----------------------------------------------------------------------------
@@ -39,9 +40,11 @@ module MuTerm.Framework.Problem (  IsDPProblem (..)  ) where
 class Functor (DPProblem typ) => IsDPProblem typ where
     data DPProblem typ :: * -> *
     getProblemType :: DPProblem typ trs -> typ
-    mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> DPProblem typ trs
     getP, getR     :: DPProblem typ trs -> trs
     mapP, mapR     :: (trs -> trs) -> DPProblem typ trs -> DPProblem typ trs
     setR, setP     :: trs -> DPProblem typ trs -> DPProblem typ trs
     setR rr = mapR (const rr)
     setP rr = mapP (const rr)
+
+class IsDPProblem typ => MkDPProblem typ trs where
+    mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> DPProblem typ trs

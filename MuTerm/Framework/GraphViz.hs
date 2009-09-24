@@ -57,11 +57,10 @@ import MuTerm.Framework.Problem
 g  = repG . dot
 gs = repG . dotSimple
 
-
 -- ----------------------------
 -- GraphViz logs
 -- ----------------------------
-sliceWorkDone :: IsMZero mp => Proof mp a -> Proof mp a
+sliceWorkDone :: IsMZero mp => Proof info mp a -> Proof info mp a
 sliceWorkDone = foldFree return (Impure . f) where
     f (Or  p pi pp) = Or  p pi (pp >>= \p -> guard (not $ isSuccess p) >> return p)
     f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
@@ -73,7 +72,7 @@ sliceWorkDone = foldFree return (Impure . f) where
 data DotProof = DotProof { showFailedPaths :: Bool }
 dotProof = dotProof' DotProof{showFailedPaths=False}
 
-dotProof' :: (IsMZero mp, Foldable mp) => DotProof -> Proof mp a -> String
+dotProof' :: (IsMZero mp, Foldable mp) => DotProof -> Proof DotInfo mp a -> String
 dotProof' DotProof{..} p = showDot $ do
                              attribute (Size (Point 100 100))
                              attribute (Compound True)

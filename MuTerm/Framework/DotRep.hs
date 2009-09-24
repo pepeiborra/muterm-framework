@@ -1,3 +1,8 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.DotRep
@@ -21,6 +26,8 @@ import Data.Graph.Inductive
 import Data.Graph.Inductive.Tree
 import Text.PrettyPrint.HughesPJClass
 
+import MuTerm.Framework.Proof
+
 class DotRep a where
    dot, dotSimple :: a -> DotGr
    dotSimple = dot
@@ -42,3 +49,19 @@ renderDot = concatMap escapeNewLines . (`shows` "\\l")
       where
         escapeNewLines '\n' = "\\l"
         escapeNewLines c    = [c]
+
+
+
+-- | Dot instance witness
+data DotInfo
+instance DotRep p => Info DotInfo p where
+  data InfoConstraints DotInfo p = DotRep p => DotInfo
+  constraints = DotInfo
+
+instance DotRep (SomeInfo DotInfo) where
+    dot (SomeInfo p) = withInfoOf p $ \DotInfo -> dot p
+    dotSimple (SomeInfo p) = withInfoOf p $ \DotInfo -> dotSimple p
+
+instance DotRep (SomeProblem DotInfo) where
+    dot (SomeProblem p) = withInfoOf p $ \DotInfo -> dot p
+    dotSimple (SomeProblem p) = withInfoOf p $ \DotInfo -> dotSimple p

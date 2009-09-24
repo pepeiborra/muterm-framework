@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts,FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PatternGuards, ViewPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
@@ -38,7 +40,7 @@ import MuTerm.Framework.Proof
 -- Text
 -- ----
 
-instance (Foldable mp, Pretty a) => Pretty (ProofF mp a) where pPrint = pprProofF
+instance (Foldable mp, Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
 pprProofF = f where
       f Success{..} =
         pPrint problem $$
@@ -83,12 +85,25 @@ pprProofF = f where
 -- HTML
 -------------
 
+-- | HTML instance witness
+data HTMLInfo
+instance HTML p => Info HTMLInfo p where
+  data InfoConstraints HTMLInfo p = HTML p => HTMLInfo
+  constraints = HTMLInfo
+
+instance HTML (SomeInfo HTMLInfo) where
+    toHtml (SomeInfo p) = withInfoOf p $ \HTMLInfo -> toHtml p
+
+instance HTML (SomeProblem HTMLInfo) where
+    toHtml (SomeProblem p) = withInfoOf p $ \HTMLInfo -> toHtml p
+
+
 instance HTML Doc where toHtml = toHtml . show
 
 data Unit1 a
 instance Monad Unit1
 
-instance (Pretty a, Ord a) => HTML (Proof Unit1 a) where
+instance (Pretty a, Ord a) => HTML (Proof HTMLInfo Unit1 a) where
    toHtml = foldFree (\prob -> p<<(pPrint prob $$ text "RESULT: not solved yet")) work where
     work DontKnow{}  = toHtml  "Don't know"
     work Success{..} =

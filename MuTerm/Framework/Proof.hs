@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
@@ -26,8 +27,9 @@ module MuTerm.Framework.Proof (
 
 ProofF(..), Proof, Solution (..)
 
-, ProblemInfo, SomeProblem(..), someProblem
-, ProofInfo, SomeInfo (..), someInfo
+, Info(..), withInfoOf, PrettyInfo
+, SomeProblem(..), someProblem
+, SomeInfo (..), someInfo
 , IsMZero(..)
 
 -- * Exported functions
@@ -43,7 +45,7 @@ import Control.Applicative((<$>))
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.PrettyPrint.HughesPJClass
-import Text.XHtml (HTML(..))
+
 
 import Control.Applicative
 import Data.DeriveTH
@@ -53,7 +55,7 @@ import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 
 import MuTerm.Framework.Problem
-import MuTerm.Framework.DotRep
+
 
 import Prelude as P
 
@@ -62,13 +64,13 @@ import Prelude as P
 -----------------------------------------------------------------------------
 
 -- | Proof Tree constructors
-data ProofF (m :: * -> *) (k :: *) =
-    And     {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblems::[k]}
-  | Or      {procInfo :: !(SomeInfo), problem :: !(SomeProblem), alternatives::m k}
-  | Single  {procInfo :: !(SomeInfo), problem :: !(SomeProblem), subProblem::k}
-  | Success {procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
-  | Fail    {procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
-  | DontKnow{procInfo :: !(SomeInfo), problem :: !(SomeProblem)}
+data ProofF info (m :: * -> *) (k :: *) =
+    And     {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info), subProblems::[k]}
+  | Or      {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info), alternatives::m k}
+  | Single  {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info), subProblem::k}
+  | Success {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info)}
+  | Fail    {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info)}
+  | DontKnow{procInfo :: !(SomeInfo info), problem :: !(SomeProblem info)}
   | Search (m k)
   | MAnd  k k
   | MDone
@@ -97,18 +99,7 @@ foldProofS = undefined
 
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
-type Proof m a = Free (ProofF m) a
-
--- | 'SomeInfo' hides the type of the proccesor info
-data SomeInfo where
-    SomeInfo :: ProofInfo p => p -> SomeInfo
-
--- | 'SomeProblem' hides the type of the problem
-data SomeProblem where
-    SomeProblem :: (HTML p, Pretty p, DotRep p) => p -> SomeProblem
-
-instance Show SomeProblem where
-  show _ = "SomeProblem"
+type Proof info m a = Free (ProofF info m) a
 {-
 f :: Proof a -> IO (Proof a)
 f = lift . foldFree g where
@@ -152,34 +143,52 @@ instance MonadPlus Solution where
   NO  a `mplus` _    = NO  a
   MAYBE `mplus` b    = b
 
------------------------------------------------------------------------------
--- Classes
------------------------------------------------------------------------------
+-- ------------------------------
+-- Parameterized super classes
+-- ------------------------------
 
--- | Class that show the info of the proofs in the desired format
-class (HTML p, Pretty p, DotRep p) => ProofInfo p
-class (HTML p, Pretty p, DotRep p) => ProblemInfo p
+-- Instance witnesses
+class Info info p where
+  data InfoConstraints info p
+  constraints :: InfoConstraints info p
 
-instance (HTML (DPProblem typ trs), Pretty (DPProblem typ trs), DotRep (DPProblem typ trs)) => ProblemInfo (DPProblem typ trs)
+withInfoOf :: Info info a => a -> (InfoConstraints info a -> b) -> b
+withInfoOf _ f = f constraints
 
-instance Pretty SomeInfo where pPrint (SomeInfo p) = pPrint p
-instance Pretty  SomeProblem where pPrint (SomeProblem p) = pPrint p
 
-instance HTML SomeInfo where toHtml (SomeInfo i) = toHtml i
-instance HTML SomeProblem where toHtml  (SomeProblem p) = toHtml p
+-- | Pretty printing info witness
+data PrettyInfo
+instance Pretty p => Info PrettyInfo p where
+  data InfoConstraints PrettyInfo p = Pretty p => PrettyInfo
+  constraints = PrettyInfo
 
-instance DotRep SomeProblem where dot (SomeProblem p) = dot p; dotSimple (SomeProblem p) = dotSimple p
-instance DotRep SomeInfo where dot (SomeInfo p) = dot p; dotSimple (SomeInfo p) = dotSimple p
+-- ------------------------
+-- Existential Wrappers
+-- ------------------------
 
-instance ProofInfo SomeInfo
-instance ProofInfo SomeProblem
+-- | 'SomeInfo' hides the type of the proccesor info
+data SomeInfo info where
+    SomeInfo :: Info info p => p -> SomeInfo info
+
+-- | 'SomeProblem' hides the type of the problem
+data SomeProblem info where
+    SomeProblem :: Info info p => p -> SomeProblem info
+
+instance Show (SomeProblem info) where
+  show _ = "SomeProblem"
+
+instance Pretty (SomeInfo PrettyInfo) where
+    pPrint (SomeInfo p) = withInfoOf p $ \PrettyInfo -> pPrint p
+
+instance Pretty (SomeProblem PrettyInfo) where
+    pPrint (SomeProblem p) = withInfoOf p $ \PrettyInfo -> pPrint p
 
 -----------------------------------------------------------------------------
 -- Instances
 -----------------------------------------------------------------------------
 $(derive (makeFunctorN 1)     ''Solution)
 
-instance Monad m => Functor (ProofF m) where
+instance Monad m => Functor (ProofF info m) where
   fmap f (And pi p kk)   = And pi p (fmap f kk)
   fmap f (Single pi p k) = Single pi p (f k)
   fmap _ (Success pi p)  = Success pi p
@@ -189,9 +198,9 @@ instance Monad m => Functor (ProofF m) where
   fmap f (MAnd k1 k2)    = MAnd (f k1) (f k2)
   fmap f MDone           = MDone
 
-instance (Monad m, Traversable m) => Foldable (ProofF m) where foldMap = T.foldMapDefault
+instance (Monad m, Traversable m) => Foldable (ProofF info m) where foldMap = T.foldMapDefault
 
-instance (Monad m, Traversable m) => Traversable (ProofF m) where
+instance (Monad m, Traversable m) => Traversable (ProofF info m) where
   traverse f (And pi p kk)   = And pi p <$> traverse f kk
   traverse f (Single pi p k) = Single pi p <$> f k
   traverse _ (Success pi p)  = pure $ Success pi p
@@ -204,49 +213,44 @@ instance (Monad m, Traversable m) => Traversable (ProofF m) where
 
 -- MonadPlus
 
-instance MonadPlus m => MonadPlus (Free (ProofF m)) where
+instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
     mplus p1 p2 = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show
-
-instance Show SomeInfo where
+{-
+instance Show (SomeInfo info) where
     show (SomeInfo p) = show (pPrint p)
-
--- Default 'bogus' Instances of Representation classes
-
-instance Pretty a => DotRep a where dot    x = Text (pPrint x) []
-instance Pretty a => HTML   a where toHtml x = toHtml (show $ pPrint x)
-
+-}
 -----------------------------------------------------------------------------
 -- Smart Constructors
 -----------------------------------------------------------------------------
 
 -- | Return a success node
-success :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> Proof m b
+success :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
 success pi p0 = Impure (Success (someInfo pi) (someProblem p0))
 
 -- | Return a fail node
-failP :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> Proof m b
+failP :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
 failP pi p0 = Impure (Fail (someInfo pi) (someProblem p0))
 
 -- | Returns a don't know node
-dontKnow :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> Proof m b
+dontKnow :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
 dontKnow pi p0 = Impure (DontKnow (someInfo pi) (someProblem p0))
 
 -- | Return a new single node
-singleP :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> b -> Proof m b
+singleP :: (Monad m, Info info p, Info info problem) => p -> problem -> b -> Proof info m b
 singleP pi p0 p = Impure (Single (someInfo pi) (someProblem p0) (return p))
 
 -- | Return a list of nodes
-andP :: (ProofInfo p, ProblemInfo problem, Monad m) => p -> problem -> [b] -> Proof m b
+andP :: (Monad m, Info info p, Info info problem) => p -> problem -> [b] -> Proof info m b
 andP pi p0 [] = success pi p0
 andP pi p0 pp = Impure (And (someInfo pi) (someProblem p0) (map return pp))
 
-mand :: Monad m => a -> a -> Proof m a
+mand :: Monad m => a -> a -> Proof info m a
 mand a b = Impure (MAnd (return a) (return b))
 
-mprod :: Monad m => [a] -> Proof m a
+mprod :: Monad m => [a] -> Proof info m a
 mprod = P.foldr mand (Impure MDone) . map return where
   mand a (Impure MDone) = a
   mand a b = Impure (MAnd a b)
@@ -256,11 +260,11 @@ mprod = P.foldr mand (Impure MDone) . map return where
 -- ---------
 
 -- | Pack the proof information
-someInfo :: ProofInfo p => p -> SomeInfo
+someInfo :: Info info p => p -> SomeInfo info
 someInfo = SomeInfo
 
 -- | Pack the problem
-someProblem :: ProblemInfo p => p -> SomeProblem
+someProblem :: Info info p => p -> SomeProblem info
 someProblem = SomeProblem
 
 {-
@@ -358,7 +362,7 @@ instance IsMZero []    where isMZero = null
 instance IsMZero Maybe where isMZero = isNothing
 
 -- | Evaluate if proof is success
-isSuccess :: IsMZero mp => Proof mp a -> Bool
+isSuccess :: IsMZero mp => Proof info mp a -> Bool
 isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
 {-
 -- | Evaluate the proof
@@ -378,5 +382,5 @@ runProofSol :: (Show a) => Proof m a -> Solution [SomeInfo]
 runProofSol p = evaluateSol p
 -}
 -- | Apply the evaluation returning the relevant proof subtree
-runProof :: MonadPlus mp => Proof mp a -> mp (Proof m ())
+runProof :: MonadPlus mp => Proof info mp a -> mp (Proof info m ())
 runProof = foldFree (const mzero) evalSolF'

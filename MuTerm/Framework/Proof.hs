@@ -267,83 +267,8 @@ someInfo = SomeInfo
 someProblem :: Info info p => p -> SomeProblem info
 someProblem = SomeProblem
 
-{-
--- | We obtain if the proof is a solution
-isSuccessF :: ProofF Bool -> Bool
-isSuccessF Single { procInfo    = SomeInfo procInfo'
-                  , subProblem = subProblem'} 
-                         = subProblem'
-isSuccessF And { subProblems = subProblems'} 
-                         = and subProblems'
-isSuccessF Or { subProblems = subProblems'} 
-                         = or subProblems'
-isSuccessF Success {}    = True
-isSuccessF Fail {}       = False
-isSuccessF DontKnow {}   = False
-
--- | We obtain the solution if it exist
---evalF :: MonadCont m => ProofF (Maybe [SomeInfo]) -> m (Maybe [SomeInfo])
-evalF :: ProofF (Maybe [SomeInfo]) -> Maybe [SomeInfo]
-evalF Single { procInfo   = procInfo'
-             , subProblem = subProblem'} 
-    = case subProblem' of
-        Nothing  -> Nothing
-        Just sol -> Just $ procInfo':sol
-evalF And { procInfo    = procInfo'
-          , subProblems = subProblems'} 
-    = if (or . map isNothing $ subProblems') then
-          Nothing
-      else
-          (Just $ procInfo':(concat . catMaybes $ subProblems'))
-evalF Or { procInfo    = procInfo'
-         , subProblems = subProblems'} 
-    = if (or . map isJust $ subProblems') then
-          (Just $ procInfo':(head . catMaybes $ subProblems'))
-      else
-          Nothing
-
-evalF Success { procInfo = procInfo' } = Just [procInfo']
-evalF Fail {}       = Nothing
-evalF DontKnow{}    = Nothing
-
-
--- | We obtain the solution if it exist
-evalSolF :: ProofF (Solution [SomeInfo]) -> Solution [SomeInfo]
-evalSolF Single { procInfo   = procInfo'
-                , subProblem = subProblem'}
-    = mapYes (procInfo':) subProblem'
-
-evalSolF And { procInfo    = procInfo'
-             , subProblems = subProblems'}
-    = if (or . map isMaybe $ subProblems') then
-          MAYBE
-      else
-          if (not . null $ noSubProblems) then
-              head noSubProblems
-          else
-              YES $ procInfo':(concat . catYes $ subProblems')
-    where noSubProblems = filter isNo subProblems'
-
-evalSolF Or { procInfo    = procInfo'
-            , subProblems = subProblems'}
-    = if (or . map (not . isMaybe) $ subProblems') then
-          case getSol subProblems' of
-            YES sol -> YES $ procInfo':sol
-            NO  sol -> NO sol
-      else
-          MAYBE
-    where -- we ensure that getSol [] never occurs
-          getSol ((YES sol):sols) = YES sol
-          getSol ((NO sol):sols)  = NO sol
-          getSol (_:sols)         = getSol sols
-
-evalSolF Success { procInfo = procInfo' } = YES [procInfo']
-evalSolF Fail { procInfo = procInfo' }    = NO [procInfo']
-evalSolF DontKnow {}   = MAYBE
--}
-
 -- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadPlus mp) => ProofF mp (mp(Proof t ())) -> mp (Proof t ())
+evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
 evalSolF' Fail{..}       = mzero -- return (wrap Fail{..})
 evalSolF' DontKnow{}     = mzero
 evalSolF' MDone          = return (Impure MDone)
@@ -364,23 +289,7 @@ instance IsMZero Maybe where isMZero = isNothing
 -- | Evaluate if proof is success
 isSuccess :: IsMZero mp => Proof info mp a -> Bool
 isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
-{-
--- | Evaluate the proof
-evaluate :: Proof m a -> Maybe [SomeInfo]
-evaluate = foldFree (\_ -> Nothing) evalF
 
--- | Evaluate the proof controlling non-termination
-evaluateSol :: Proof m a -> Solution [SomeInfo]
-evaluateSol = foldFree (\_ -> MAYBE) evalSolF
-
--- | Apply the evaluation
-runProof :: (Show a) => Proof m a -> Maybe [SomeInfo]
-runProof p = evaluate p
-
--- | Apply the evaluation
-runProofSol :: (Show a) => Proof m a -> Solution [SomeInfo]
-runProofSol p = evaluateSol p
--}
 -- | Apply the evaluation returning the relevant proof subtree
 runProof :: MonadPlus mp => Proof info mp a -> mp (Proof info m ())
 runProof = foldFree (const mzero) evalSolF'

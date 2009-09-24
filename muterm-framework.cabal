@@ -25,5 +25,5 @@ Library
     MuTerm.Framework.Output,
     MuTerm.Framework.GraphViz
 
-  build-depends: 	base -any, control-monad-free -any, containers, prettyclass, xhtml, derive, fgl, graphviz, dotgen == 0.3.1
+  build-depends: 	base -any, control-monad-free -any, containers, prettyclass, xhtml, derive, fgl, graphviz == 2999.1.0.2, dotgen == 0.3.1
   ghc-options:   	-O2 -threaded 

@@ -75,39 +75,8 @@ data ProofF info (m :: * -> *) (k :: *) =
   | MAnd  k k
   | MDone
 
--- -------------------
--- Sebastian's monad
--- -------------------
-data ProofS m a =
-    PureS a
-  | AndS  [ProofS m a]
-  | LazyS (m (ProofS m a))
-
-type ProofListT a = [ProofS [] a]
-
-instance Monad m => Monad (ProofS m) where
-  return = PureS
-  PureS a >>= f = f a
-  AndS aa >>= f = AndS (P.map (>>=f) aa)
-  LazyS a >>= f = LazyS (liftM (>>= f) a)
-
-runProofS :: MonadPlus m => ProofS m a -> m (ProofS t a)
-runProofS = foldProofS (return . PureS) (liftM AndS . P.sequence) join
-
-foldProofS :: (a -> b) -> ([b] -> b) -> (m b -> b) -> ProofS m a -> b
-foldProofS = undefined
-
-
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
 type Proof info m a = Free (ProofF info m) a
-{-
-f :: Proof a -> IO (Proof a)
-f = lift . foldFree g where
-  g (Stage k) = k >>= id
-  g (t :: ProofF (IO (Proof a))) = fmap Impure (sequence t)
--}
-
-
 
 -- ------------------
 -- Solution datatype

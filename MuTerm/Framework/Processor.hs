@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances, FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Processor
@@ -24,7 +24,7 @@ Processor(..)
 ) where
 
 import Control.Monad
-import MuTerm.Framework.Proof (Proof)
+import MuTerm.Framework.Proof (Proof,Info)
 import MuTerm.Framework.Problem
 
 -----------------------------------------------------------------------------
@@ -34,9 +34,9 @@ import MuTerm.Framework.Problem
 
 -- | Each processor is an instance of the class 'Processor'. The
 -- output problem depends of the input problem
-class Processor tag o d | tag o -> d where
-  apply       :: MonadPlus mp => tag -> o -> Proof info mp d
-  applySearch :: MonadPlus mp => tag -> o -> [Proof info mp d]
+class Processor info tag o d | tag o -> info d where
+  apply       :: (MonadPlus mp, Info info o, Info info d) => tag -> o -> Proof info mp d
+  applySearch :: (MonadPlus mp, Info info o, Info info d) => tag -> o -> [Proof info mp d]
 
   apply       tag p = msum (applySearch tag p)
   applySearch tag p = [apply tag p]

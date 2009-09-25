@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances, OverlappingInstances, FlexibleInstances #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -32,6 +32,9 @@ class DotRep a where
    dot, dotSimple :: a -> DotGr
    dotSimple = dot
    dot = dotSimple
+
+-- | Dummy default instance
+instance Pretty a => DotRep a where dot x = Text (pPrint x) []
 
 type DotGr = DotGrF (Gr [Attribute] [Attribute])
 data DotGrF a = Text Doc [Attribute]

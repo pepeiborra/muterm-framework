@@ -3,7 +3,7 @@
 {-# LANGUAGE PatternGuards, ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -41,6 +41,7 @@ import MuTerm.Framework.Proof
 -- ----
 
 instance (Foldable mp, Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
+
 pprProofF = f where
       f Success{..} =
         pPrint problem $$
@@ -84,6 +85,9 @@ pprProofF = f where
 --------------
 -- HTML
 -------------
+
+-- | Dummy default instance
+instance Pretty a => HTML a where toHtml = toHtml . show . pPrint
 
 -- | HTML instance witness
 data HTMLInfo

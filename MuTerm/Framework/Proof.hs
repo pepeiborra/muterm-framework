@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
@@ -27,7 +28,7 @@ module MuTerm.Framework.Proof (
 
 ProofF(..), Proof, Solution (..)
 
-, Info(..), withInfoOf, PrettyInfo
+, Info(..), InfoConstraints(..), withInfoOf, PrettyInfo
 , SomeProblem(..), someProblem
 , SomeInfo (..), someInfo
 , IsMZero(..)
@@ -131,6 +132,11 @@ instance Pretty p => Info PrettyInfo p where
   data InfoConstraints PrettyInfo p = Pretty p => PrettyInfo
   constraints = PrettyInfo
 
+-- | Tuples of information witnesses
+instance (Info i a, Info j a) => Info (i,j) a where
+  data InfoConstraints (i,j) a = (:^:) (InfoConstraints i a) (InfoConstraints j a)
+  constraints = constraints :^: constraints
+
 -- ------------------------
 -- Existential Wrappers
 -- ------------------------
@@ -151,6 +157,21 @@ instance Pretty (SomeInfo PrettyInfo) where
 
 instance Pretty (SomeProblem PrettyInfo) where
     pPrint (SomeProblem p) = withInfoOf p $ \PrettyInfo -> pPrint p
+
+-- Tuple instances
+
+instance Pretty (SomeInfo (PrettyInfo, a)) where
+    pPrint (SomeInfo (p::p)) = withInfoOf p $ \(PrettyInfo :^: (_::InfoConstraints a p)) -> pPrint p
+
+instance Pretty (SomeInfo (a,PrettyInfo)) where
+    pPrint (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: PrettyInfo) -> pPrint p
+
+instance Pretty (SomeProblem (PrettyInfo, a)) where
+    pPrint (SomeProblem (p::p)) = withInfoOf p $ \(PrettyInfo :^: (_::InfoConstraints a p)) -> pPrint p
+
+instance Pretty (SomeProblem (a,PrettyInfo)) where
+    pPrint (SomeProblem (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: PrettyInfo) -> pPrint p
+
 
 -----------------------------------------------------------------------------
 -- Instances

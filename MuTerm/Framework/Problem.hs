@@ -18,7 +18,7 @@
 
 module MuTerm.Framework.Problem ( 
 
-IsProblem(..), IsDPProblem(..), MkDPProblem(..) 
+IsProblem(..), IsDPProblem(..), MkProblem(..), MkDPProblem(..)
 
 ) where
 

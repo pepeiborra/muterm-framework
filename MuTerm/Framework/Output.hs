@@ -158,7 +158,7 @@ divmaybe  = divresult +++ spani "maybe" << "Fail. "
 -- Dot
 -- ----
 
-instance (IsDPProblem typ, Pretty rules) => DotRep (DPProblem typ [rules]) where
+instance (IsDPProblem typ, Pretty rules) => DotRep (Problem typ [rules]) where
   dot p = Text rep atts where
     atts = [ Shape BoxShape
            , Style (Stl Bold Nothing)

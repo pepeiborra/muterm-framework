@@ -41,7 +41,7 @@ import MuTerm.Framework.Proof
 -- ----
 
 instance (Foldable mp, Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
-instance (Foldable mp, Pretty a, Pretty (SomeInfo info), Pretty (SomeProblem info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
+instance (Foldable mp, Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
 
 pprProofF = f where
       f Success{..} =
@@ -99,17 +99,13 @@ instance HTML p => Info HTMLInfo p where
 instance HTML (SomeInfo HTMLInfo) where
     toHtml (SomeInfo p) = withInfoOf p $ \HTMLInfo -> toHtml p
 
-instance HTML (SomeProblem HTMLInfo) where
-    toHtml (SomeProblem p) = withInfoOf p $ \HTMLInfo -> toHtml p
-
-
 instance HTML Doc where toHtml = toHtml . show
 
 
 instance (Pretty a, Ord a, Monad m) => HTML (Proof HTMLInfo m a) where
   toHtml = toHtmlProof
 
-instance (Pretty a, Ord a, Monad m, HTML (SomeProblem info), HTML (SomeInfo info)) => HTML (Proof info m a) where
+instance (Pretty a, Ord a, Monad m, HTML (SomeInfo info)) => HTML (Proof info m a) where
   toHtml = toHtmlProof
 
 toHtmlProof = foldFree (\prob -> p<<(pPrint prob $$ text "RESULT: not solved yet")) work where

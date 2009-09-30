@@ -29,7 +29,6 @@ module MuTerm.Framework.Proof (
 ProofF(..), Proof, Solution (..)
 
 , Info(..), InfoConstraints(..), withInfoOf, PrettyInfo
-, SomeProblem(..), someProblem
 , SomeInfo (..), someInfo
 , IsMZero(..)
 
@@ -66,12 +65,12 @@ import Prelude as P
 
 -- | Proof Tree constructors
 data ProofF info (m :: * -> *) (k :: *) =
-    And     {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info), subProblems::[k]}
-  | Or      {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info), alternatives::m k}
-  | Single  {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info), subProblem::k}
-  | Success {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info)}
-  | Fail    {procInfo :: !(SomeInfo info), problem :: !(SomeProblem info)}
-  | DontKnow{procInfo :: !(SomeInfo info), problem :: !(SomeProblem info)}
+    And     {procInfo, problem :: !(SomeInfo info), subProblems::[k]}
+  | Or      {procInfo, problem :: !(SomeInfo info), alternatives::m k}
+  | Single  {procInfo, problem :: !(SomeInfo info), subProblem::k}
+  | Success {procInfo, problem :: !(SomeInfo info)}
+  | Fail    {procInfo, problem :: !(SomeInfo info)}
+  | DontKnow{procInfo, problem :: !(SomeInfo info)}
   | Search (m k)
   | MAnd  k k
   | MDone
@@ -145,18 +144,8 @@ instance (Info i a, Info j a) => Info (i,j) a where
 data SomeInfo info where
     SomeInfo :: Info info p => p -> SomeInfo info
 
--- | 'SomeProblem' hides the type of the problem
-data SomeProblem info where
-    SomeProblem :: Info info p => p -> SomeProblem info
-
-instance Show (SomeProblem info) where
-  show _ = "SomeProblem"
-
 instance Pretty (SomeInfo PrettyInfo) where
     pPrint (SomeInfo p) = withInfoOf p $ \PrettyInfo -> pPrint p
-
-instance Pretty (SomeProblem PrettyInfo) where
-    pPrint (SomeProblem p) = withInfoOf p $ \PrettyInfo -> pPrint p
 
 -- Tuple instances
 
@@ -165,13 +154,6 @@ instance Pretty (SomeInfo (PrettyInfo, a)) where
 
 instance Pretty (SomeInfo (a,PrettyInfo)) where
     pPrint (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: PrettyInfo) -> pPrint p
-
-instance Pretty (SomeProblem (PrettyInfo, a)) where
-    pPrint (SomeProblem (p::p)) = withInfoOf p $ \(PrettyInfo :^: (_::InfoConstraints a p)) -> pPrint p
-
-instance Pretty (SomeProblem (a,PrettyInfo)) where
-    pPrint (SomeProblem (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: PrettyInfo) -> pPrint p
-
 
 -----------------------------------------------------------------------------
 -- Instances
@@ -208,10 +190,6 @@ instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mplus p1 p2 = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show
-{-
-instance Show (SomeInfo info) where
-    show (SomeInfo p) = show (pPrint p)
--}
 -----------------------------------------------------------------------------
 -- Smart Constructors
 -----------------------------------------------------------------------------
@@ -251,11 +229,11 @@ mprod = P.foldr mand (Impure MDone) . map return where
 
 -- | Pack the proof information
 someInfo :: Info info p => p -> SomeInfo info
-someInfo = SomeInfo
+someInfo    = SomeInfo
 
 -- | Pack the problem
-someProblem :: Info info p => p -> SomeProblem info
-someProblem = SomeProblem
+someProblem :: Info info p => p -> SomeInfo info
+someProblem = SomeInfo
 
 -- | Obtain the solution, collecting the proof path in the way
 evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())

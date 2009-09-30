@@ -72,7 +72,7 @@ sliceWorkDone = foldFree return (Impure . f) where
 data DotProof = DotProof { showFailedPaths :: Bool }
 dotProof = dotProof' DotProof{showFailedPaths=False}
 
-dotProof' :: (IsMZero mp, Foldable mp, DotRep (SomeProblem info), DotRep (SomeInfo info)) => DotProof -> Proof info mp a -> String
+dotProof' :: (IsMZero mp, Foldable mp, DotRep (SomeInfo info)) => DotProof -> Proof info mp a -> String
 dotProof' DotProof{..} p = showDot $ do
                              attribute (Size (Point 100 100))
                              attribute (Compound True)

@@ -66,10 +66,6 @@ instance DotRep (SomeInfo DotInfo) where
     dot (SomeInfo p) = withInfoOf p $ \DotInfo -> dot p
     dotSimple (SomeInfo p) = withInfoOf p $ \DotInfo -> dotSimple p
 
-instance DotRep (SomeProblem DotInfo) where
-    dot (SomeProblem p) = withInfoOf p $ \DotInfo -> dot p
-    dotSimple (SomeProblem p) = withInfoOf p $ \DotInfo -> dotSimple p
-
 -- Tuple instances
 
 instance DotRep (SomeInfo (DotInfo, a)) where
@@ -79,11 +75,3 @@ instance DotRep (SomeInfo (DotInfo, a)) where
 instance DotRep (SomeInfo (a,DotInfo)) where
     dot (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dot p
     dotSimple (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dotSimple p
-
-instance DotRep (SomeProblem (DotInfo, a)) where
-    dot (SomeProblem (p::p)) = withInfoOf p $ \(DotInfo :^: (_::InfoConstraints a p)) -> dot p
-    dotSimple (SomeProblem (p::p)) = withInfoOf p $ \(DotInfo :^: (_::InfoConstraints a p)) -> dotSimple p
-
-instance DotRep (SomeProblem (a,DotInfo)) where
-    dot (SomeProblem (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dot p
-    dotSimple (SomeProblem (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dotSimple p

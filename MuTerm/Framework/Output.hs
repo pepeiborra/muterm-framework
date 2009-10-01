@@ -31,10 +31,8 @@ import Data.HashTable (hashString)
 import qualified Text.XHtml as H
 import Text.XHtml hiding (text)
 
-import Control.Monad.Free
-import Text.PrettyPrint.HughesPJClass as Doc hiding (Style)
-
 import MuTerm.Framework.DotRep
+import Text.PrettyPrint.HughesPJClass as Doc hiding (Style)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Proof
 
@@ -42,10 +40,7 @@ import MuTerm.Framework.Proof
 -- Text
 -- ----
 
-instance (Pretty (f(Free f a)), Pretty a) => Pretty (Free f a) where
-    pPrint (Impure t) = pPrint t
-    pPrint (Pure a)   = pPrint a
-
+instance (Foldable mp, Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
 instance (Foldable mp, Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
 
 pprProofF = f where

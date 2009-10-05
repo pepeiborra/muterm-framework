@@ -3,7 +3,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, TypeSynonymInstances #-}
-{-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE KindSignatures #-}
@@ -26,15 +25,16 @@ module MuTerm.Framework.Proof (
 
 -- * Exported data
 
-ProofF(..), Proof, Solution (..)
+ProofF(..), Proof
 
-, Info(..), InfoConstraints(..), withInfoOf, PrettyInfo
+, Info(..), InfoConstraints (..), withInfoOf, PrettyInfo
 , SomeInfo (..), someInfo
 , IsMZero(..)
 
 -- * Exported functions
+
 , success, singleP, andP, dontKnow, failP, mand, mprod
-, isSuccess, runProof -- , runProof, runProofSol', runProofByStages
+, isSuccess, runProof
 
 ) where
 
@@ -77,40 +77,6 @@ data ProofF info (m :: * -> *) (k :: *) =
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
 type Proof info m a = Free (ProofF info m) a
-
--- ------------------
--- Solution datatype
--- ------------------
--- | Solution is the result of the evaluation
-data Solution a = YES a
-                | NO  a
-                | MAYBE
-
-isNo NO{} = True; isNo _ = False
-isMaybe MAYBE{} = True; isMaybe _ = False
-isYes YES{} = True; isYes _ = False
-
-catYes []               = []
-catYes ((YES sol):sols) = sol:(catYes sols)
-catYes (_:sols)         = catYes sols
-
-mapYes f (YES x) = YES x
-mapYes _ x       = x
-
--- | Isomorphic to the Maybe monad (return == YES)
-instance Monad Solution where
-  return = YES
-  YES a >>= f = f a
-  NO  a >>= f = f a
-  MAYBE >>= _ = MAYBE
-
--- | The MonadPlus instance elegantly enforces the priority of NO over YES
-instance MonadPlus Solution where
-  mzero = MAYBE
-  YES a `mplus` NO b = NO b
-  YES a `mplus` _    = YES a
-  NO  a `mplus` _    = NO  a
-  MAYBE `mplus` b    = b
 
 -- ------------------------------
 -- Parameterized super classes
@@ -158,7 +124,6 @@ instance Pretty (SomeInfo (a,PrettyInfo)) where
 -----------------------------------------------------------------------------
 -- Instances
 -----------------------------------------------------------------------------
-$(derive (makeFunctorN 1)     ''Solution)
 
 instance Monad m => Functor (ProofF info m) where
   fmap f (And pi p kk)   = And pi p (fmap f kk)

@@ -33,7 +33,7 @@ ProofF(..), Proof
 
 -- * Exported functions
 
-, success, singleP, andP, dontKnow, failP, mand, mprod
+, success, singleP, andP, dontKnow, refuted, mand, mprod
 , isSuccess, runProof
 
 ) where
@@ -69,7 +69,7 @@ data ProofF info (m :: * -> *) (k :: *) =
   | Or      {procInfo, problem :: !(SomeInfo info), alternatives::m k}
   | Single  {procInfo, problem :: !(SomeInfo info), subProblem::k}
   | Success {procInfo, problem :: !(SomeInfo info)}
-  | Fail    {procInfo, problem :: !(SomeInfo info)}
+  | Refuted {procInfo, problem :: !(SomeInfo info)}
   | DontKnow{procInfo, problem :: !(SomeInfo info)}
   | Search (m k)
   | MAnd  k k
@@ -129,7 +129,7 @@ instance Monad m => Functor (ProofF info m) where
   fmap f (And pi p kk)   = And pi p (fmap f kk)
   fmap f (Single pi p k) = Single pi p (f k)
   fmap _ (Success pi p)  = Success pi p
-  fmap _ (Fail pi p)     = Fail pi p
+  fmap _ (Refuted pi p)  = Refuted pi p
   fmap _ (DontKnow pi p) = DontKnow pi p
   fmap f (Search mk)     = Search (liftM f mk)
   fmap f (MAnd k1 k2)    = MAnd (f k1) (f k2)
@@ -141,7 +141,7 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
   traverse f (And pi p kk)   = And pi p <$> traverse f kk
   traverse f (Single pi p k) = Single pi p <$> f k
   traverse _ (Success pi p)  = pure $ Success pi p
-  traverse _ (Fail pi p)     = pure $ Fail pi p
+  traverse _ (Refuted pi p)  = pure $ Refuted pi p
   traverse _ (DontKnow pi p) = pure $ DontKnow pi p
   traverse f (Search mk)     = Search <$> traverse f mk
   traverse f (MAnd k1 k2)    = MAnd <$> f k1 <*> f k2
@@ -163,9 +163,9 @@ instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
 success :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
 success pi p0 = Impure (Success (someInfo pi) (someProblem p0))
 
--- | Return a fail node
-failP :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
-failP pi p0 = Impure (Fail (someInfo pi) (someProblem p0))
+-- | Return a refuted node
+refuted :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
+refuted pi p0 = Impure (Refuted (someInfo pi) (someProblem p0))
 
 -- | Returns a don't know node
 dontKnow :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
@@ -202,7 +202,7 @@ someProblem = SomeInfo
 
 -- | Obtain the solution, collecting the proof path in the way
 evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
-evalSolF' Fail{..}       = mzero -- return (wrap Fail{..})
+evalSolF' Refuted{..}    = return (Impure Refuted{..})
 evalSolF' DontKnow{}     = mzero
 evalSolF' MDone          = return (Impure MDone)
 evalSolF' Success{..}    = return (Impure Success{..})

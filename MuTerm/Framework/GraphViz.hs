@@ -81,7 +81,7 @@ dotProof' DotProof{..} p = showDot $ do
                               $ p
  where
    f (Annotated done Success{..}) = colorJoin done [g problem, g procInfo, textNode (text "YES") [Color $ mkColor "#29431C"]]
-   f (Annotated done Fail{..})    = colorJoin done [g problem, g procInfo, textNode (text "NO")  [Color $ mkColor "#60233E"]]
+   f (Annotated done Refuted{..}) = colorJoin done [g problem, g procInfo, textNode (text "NO")  [Color $ mkColor "#60233E"]]
    f (Annotated _ MDone{})        = mempty
    f (Annotated done DontKnow{..})= colorJoin done [g procInfo, textNode (text "Don't Know") []]
    f (Annotated done (MAnd p1 p2))= do

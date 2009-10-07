@@ -48,10 +48,10 @@ pprProofF = f where
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo $$
         text ("RESULT: Problem solved succesfully")
-      f Fail{..} =
+      f Refuted{..} =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo  $$
-        text ("RESULT: Problem could not be solved.")
+        text ("RESULT: Termination could be refuted.")
       f DontKnow{..} =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo  $$
@@ -116,7 +116,7 @@ toHtmlProof = foldFree (\prob -> p<<(pPrint prob $$ text "RESULT: not solved yet
            procInfo +++ br +++
            divyes
 
-    work Fail{..} =
+    work Refuted{..} =
         p
         << problem  +++ br +++
            procInfo +++ br +++

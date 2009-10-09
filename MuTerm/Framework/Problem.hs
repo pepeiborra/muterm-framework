@@ -48,9 +48,11 @@ class IsProblem typ => MkProblem typ trs where
     mapR     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
     setR     :: trs -> Problem typ trs -> Problem typ trs
     setR rr = mapR (const rr)
+    mapR f p = setR (f (getR p)) p
 
 class (IsDPProblem typ, MkProblem typ trs) => MkDPProblem typ trs where
     mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> Problem typ trs
     mapP     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
     setP     :: trs -> Problem typ trs -> Problem typ trs
     setP rr = mapP (const rr)
+    mapP f p = setP (f (getP p)) p

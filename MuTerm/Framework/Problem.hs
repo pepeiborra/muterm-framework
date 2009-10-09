@@ -39,18 +39,18 @@ class Functor (Problem typ) => IsProblem typ where
     data Problem typ :: * -> *
     getProblemType :: Problem typ trs -> typ
     getR     :: Problem typ trs -> trs
+
+class IsProblem typ => IsDPProblem typ where
+    getP     :: Problem typ trs -> trs
+
+class IsProblem typ => MkProblem typ trs where
+    mkProblem    :: (rules ~ trs) => typ -> rules -> Problem typ trs
     mapR     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
     setR     :: trs -> Problem typ trs -> Problem typ trs
     setR rr = mapR (const rr)
 
-class IsProblem typ => IsDPProblem typ where
-    getP     :: Problem typ trs -> trs
+class (IsDPProblem typ, MkProblem typ trs) => MkDPProblem typ trs where
+    mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> Problem typ trs
     mapP     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
     setP     :: trs -> Problem typ trs -> Problem typ trs
     setP rr = mapP (const rr)
-
-class IsProblem typ => MkProblem typ trs where
-    mkProblem    :: (rules ~ trs) => typ -> rules -> Problem typ trs
-
-class IsDPProblem typ => MkDPProblem typ trs where
-    mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> Problem typ trs

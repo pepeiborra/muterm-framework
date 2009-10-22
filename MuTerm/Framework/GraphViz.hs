@@ -239,6 +239,7 @@ annotate p i = fmap fst . foldFree (\x -> Pure (x,p x))
 
 repG Nodes{..}    = do
   (c,(a,b)) <- cluster $ do
+    maybe (return ()) (\(d,atts) -> mapM_ attribute (label d : atts)) legend
     mapM_ attribute attributes
     table <- Map.fromList `liftM` forM (labNodes nodes) (\(n,atts) -> do {n' <- node_ atts; return (n,n')})
     forM_ (labEdges nodes) $ \(n1,n2,atts) -> do

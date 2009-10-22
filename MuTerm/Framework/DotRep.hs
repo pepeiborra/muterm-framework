@@ -40,6 +40,7 @@ instance Pretty a => DotRep a where dot x = Text (pPrint x) []
 type DotGr = DotGrF (Gr [Attribute] [Attribute])
 data DotGrF a = Text Doc [Attribute]
               | Nodes { nodes :: a
+                      , legend :: Maybe (Doc,[Attribute])
                       , attributes :: [Attribute]
                       , incoming, outgoing :: Node}
 

@@ -19,6 +19,8 @@ module MuTerm.Framework.Strategy where
 import MuTerm.Framework.Proof(Proof)
 
 import Control.Monad ((>=>), mplus, MonadPlus)
+import Control.Monad.Free
+import MuTerm.Framework.Proof
 
 -----------------------------------------------------------------------------
 -- Functions
@@ -37,6 +39,12 @@ import Control.Monad ((>=>), mplus, MonadPlus)
 infixl 5 .|.
 infixl 5 .&.
 
--- | We apply the strategy recursively
+-- | Apply a strategy until a fixpoint is reached
 fixSolver :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
-fixSolver f x = let x' = f x in (x' >>= fixSolver f) -- x' `mplus` (x' >>= fixSolver f)
+fixSolver f x = let x' = f x in (x' >>= fixSolver f)
+
+-- | Try to apply a strategy and if it fails return the problem unmodified
+try :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
+try f x = case f x of
+            Impure DontKnow{} -> return x
+            res -> res

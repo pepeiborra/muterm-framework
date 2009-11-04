@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE UndecidableInstances, OverlappingInstances, FlexibleInstances #-}
-
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.DotRep
@@ -25,6 +25,8 @@ import qualified Data.Graph
 import Data.GraphViz.Attributes
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Tree
+import Data.Foldable (Foldable)
+import Data.Traversable (Traversable)
 import Text.PrettyPrint.HughesPJClass
 
 import MuTerm.Framework.Proof
@@ -43,6 +45,8 @@ data DotGrF a = Text Doc [Attribute]
                       , legend :: Maybe (Doc,[Attribute])
                       , attributes :: [Attribute]
                       , incoming, outgoing :: Node}
+
+  deriving (Functor, Foldable, Traversable)
 
 defaultDot x = Text (pPrint x) []
 

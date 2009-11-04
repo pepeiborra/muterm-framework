@@ -7,7 +7,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Proof
@@ -48,9 +48,7 @@ import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.PrettyPrint.HughesPJClass
 
-import Data.DeriveTH
-import Data.Derive.Functor
-import Data.Derive.Traversable
+import Control.Applicative
 import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 
@@ -74,6 +72,7 @@ data ProofF info (m :: * -> *) (k :: *) =
   | Search (m k)
   | MAnd  k k
   | MDone
+--  deriving (Functor, Foldable, Traversable)
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
 type Proof info m a = Free (ProofF info m) a

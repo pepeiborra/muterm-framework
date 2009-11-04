@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
 
 -----------------------------------------------------------------------------
@@ -27,9 +26,6 @@ import Control.Arrow (first)
 import Control.Monad
 import Control.Monad.Free
 
-import Data.DeriveTH
-import Data.Derive.Functor
-import Data.Derive.Traversable
 import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(traverse))
 import qualified Data.Traversable as T
@@ -249,10 +245,3 @@ repG Nodes{..}    = do
   return (ClusterNode a b c)
 
 repG (Text t att) = textNode t att
-
--- -----------------
--- Derived instances
--- -----------------
-$(derive makeFunctor     ''DotGrF)
-$(derive makeFoldable    ''DotGrF)
-$(derive makeTraversable ''DotGrF)

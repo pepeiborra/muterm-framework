@@ -43,6 +43,12 @@ infixl 5 .&.
 fixSolver :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
 fixSolver f x = let x' = f x in (x' >>= fixSolver f)
 
+-- | Apply a strategy a bounded number of times
+repeatSolver :: Monad mp => Int -> (a -> Proof info mp a) -> a -> Proof info mp a
+repeatSolver max f = go max where
+  go 0 x = return x
+  go n x = let x' = f x in (x' >>= go (n-1))
+
 -- | Try to apply a strategy and if it fails return the problem unmodified
 try :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
 try f x = case f x of

@@ -72,7 +72,7 @@ sliceWorkDone = foldFree return (Impure . f) where
 data DotProof = DotProof { showFailedPaths :: Bool }
 dotProof = dotProof' DotProof{showFailedPaths=False}
 
-dotProof' :: (IsMZero mp, Foldable mp, DotRep (SomeInfo info)) => DotProof -> Proof info mp a -> String
+dotProof' :: (IsMZero mp, DotRep (SomeInfo info)) => DotProof -> Proof info mp a -> String
 dotProof' DotProof{..} p = showDot $ do
                              attribute (Size (Point 100 100))
                              attribute (Compound True)
@@ -102,10 +102,7 @@ dotProof' DotProof{..} p = showDot $ do
    f (Annotated done Single{..})
       | done || showFailedPaths = colorJoin done [g problem, g procInfo] ->> subProblem
       | otherwise               = colorJoin done [g procInfo] ->> subProblem
-
-   f (Annotated done (Search mk))
-      | done || showFailedPaths = colorJoin done [] ->> allPar (toList mk)
-      | otherwise = mempty
+   f (Annotated done (Search mk)) = colorJoin False [textNode (text " ") []]
 
 colorJoin True  = foldMap (liftM (ParamJoin [Color $ mkColor "green"]))
 colorJoin False = foldMap (liftM (ParamJoin [Color $ mkColor "red"]))

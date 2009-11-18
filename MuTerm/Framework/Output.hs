@@ -40,8 +40,8 @@ import MuTerm.Framework.Proof
 -- Text
 -- ----
 
-instance (Foldable mp, Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
-instance (Foldable mp, Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
+instance (Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
+instance (Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
 
 pprProofF = f where
       f Success{..} =
@@ -81,7 +81,7 @@ pprProofF = f where
         text ("Problem was divided in 2 subproblems.") $$
         nest 8 (vcat $ punctuate (text "\n") $ map pPrint [p1,p2])
       f MDone = text "Done"
-      f (Search sub) =  vcat (intersperse (text "Trying something different") $ map pPrint $ toList sub)
+      f (Search sub) = text "Trying something different"
 
 --------------
 -- HTML

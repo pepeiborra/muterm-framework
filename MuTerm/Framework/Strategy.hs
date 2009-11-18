@@ -50,7 +50,8 @@ repeatSolver max f = go max where
   go n x = let x' = f x in (x' >>= go (n-1))
 
 -- | Try to apply a strategy and if it fails return the problem unmodified
-try :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
+try :: MonadPlus mp => (a -> Proof info mp a) -> a -> Proof info mp a
 try f x = case f x of
             Impure DontKnow{} -> return x
-            res -> res
+            Impure (Search m) -> Impure (Search (m `mplus` (return.return) x))
+            res               -> res

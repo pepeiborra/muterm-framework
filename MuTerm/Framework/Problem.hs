@@ -15,10 +15,11 @@
 --
 -----------------------------------------------------------------------------
 
-module MuTerm.Framework.Problem ( 
+module MuTerm.Framework.Problem (
 
-IsProblem(..), IsDPProblem(..), MkProblem(..), MkDPProblem(..)
-
+IsProblem(..), IsDPProblem(..),
+MkProblem(..), MkDPProblem(..),
+mkDerivedProblem, mkDerivedDPProblem
 ) where
 
 
@@ -56,3 +57,9 @@ class (IsDPProblem typ, MkProblem typ trs) => MkDPProblem typ trs where
     setP     :: trs -> Problem typ trs -> Problem typ trs
     setP rr = mapP (const rr)
     mapP f p = setP (f (getP p)) p
+
+mkDerivedProblem :: (IsProblem typ, MkProblem typ' trs) => typ' -> Problem typ trs -> Problem typ' trs
+mkDerivedProblem typ p = mkProblem typ (getR p)
+
+mkDerivedDPProblem :: (IsDPProblem typ, MkDPProblem typ' trs) => typ' -> Problem typ trs -> Problem typ' trs
+mkDerivedDPProblem typ p = mkDPProblem typ (getR p) (getP p)

@@ -54,3 +54,7 @@ try :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
 try f x = case f x of
             Impure DontKnow{} -> return x
             res -> res
+
+-- | If we have branches in the strategy that arrive to different kind
+-- of problems, we have to close each branch with the same type
+final _ = return ()

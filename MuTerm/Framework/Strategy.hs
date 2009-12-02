@@ -55,3 +55,7 @@ try f x = case f x of
             Impure DontKnow{} -> return x
             Impure (Search m) -> Impure (Search (m `mplus` (return.return) x))
             res               -> res
+
+-- | If we have branches in the strategy that arrive to different kind
+-- of problems, we have to close each branch with the same type
+final _ = return ()

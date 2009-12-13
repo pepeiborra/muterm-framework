@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE KindSignatures #-}
@@ -38,7 +39,8 @@ ProofF(..), Proof
 
 ) where
 
-
+import Control.Applicative
+import Control.DeepSeq
 import Control.Monad as M (MonadPlus(..), msum, liftM, join, (>>=))
 import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
 import Control.Applicative((<$>))
@@ -46,8 +48,6 @@ import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.PrettyPrint.HughesPJClass
 
-
-import Control.Applicative
 import Data.DeriveTH
 import Data.Derive.Functor
 import Data.Derive.Traversable
@@ -77,6 +77,21 @@ data ProofF info (m :: * -> *) (k :: *) =
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
 type Proof info m a = Free (ProofF info m) a
+
+instance NFData a => NFData (ProofF info m a) where
+  rnf (And _ _ pp) = rnf pp `seq` ()
+  rnf Or{} = ()
+  rnf (Single _ _ p) = rnf p `seq` ()
+  rnf Success{} = ()
+  rnf Refuted{} = ()
+  rnf DontKnow{} = ()
+  rnf Search{} = ()
+  rnf (MAnd p1 p2) = rnf p1 `seq` rnf p2 `seq` ()
+  rnf MDone = ()
+
+instance (NFData a, NFData (f(Free f a))) => NFData (Free f a) where
+  rnf (Pure a) = rnf a `seq` ()
+  rnf (Impure fa) = rnf fa `seq` ()
 
 -- ------------------------------
 -- Parameterized super classes

@@ -15,5 +15,10 @@
 
 module MuTerm.Framework.Problem.Types where
 
+import Control.DeepSeq
+
 data Rewriting  = Rewriting  deriving (Eq, Ord, Show)
 data IRewriting = IRewriting deriving (Eq, Ord, Show)
+
+instance NFData Rewriting
+instance NFData IRewriting

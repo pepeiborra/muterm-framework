@@ -18,8 +18,11 @@ module MuTerm.Framework.Strategy where
 
 import MuTerm.Framework.Proof(Proof)
 
+import Control.Applicative
 import Control.Monad ((>=>), mplus, MonadPlus)
 import Control.Monad.Free
+import Control.Parallel.Strategies
+import Data.Traversable (Traversable, traverse)
 import MuTerm.Framework.Proof
 
 -----------------------------------------------------------------------------
@@ -31,6 +34,18 @@ import MuTerm.Framework.Proof
 -- | Or strategy combinator
 (.|.) :: (MonadPlus m) => (t -> m a) -> (t -> m a) -> t -> m a
 (f .|. g) m = f m `mplus` g m
+
+-- | shallow parallel Or strategy combinator
+(.||.) :: MonadPlus m => (t -> m a) -> (t -> m a) -> t -> m a
+(f .||. g) m = uncurry mplus ((f m, g m)
+                  `using`
+               parPair rwhnf rwhnf)
+
+-- | deep parallel Or strategy combinator
+(.|||.) :: (NFData a, MonadPlus m) => (t -> Proof info m a) -> (t -> Proof info m a) -> t -> Proof info m a
+(f .|||. g) m = uncurry mplus ((f m, g m)
+                  `using`
+               parPair rdeepseq rdeepseq)
 
 -- | And strategy combinator
 (.&.) :: Monad mp => (a -> Proof info mp b) -> (b -> Proof info mp c) -> a -> Proof info mp c

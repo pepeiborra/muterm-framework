@@ -51,8 +51,8 @@ import MuTerm.Framework.Proof
 (.&.) :: Monad mp => (a -> Proof info mp b) -> (b -> Proof info mp c) -> a -> Proof info mp c
 (.&.) = (>=>)
 
-infixl 5 .|.
-infixl 5 .&.
+infixr 5 .|., .||., .|||.
+infixr 5 .&.
 
 -- | Apply a strategy until a fixpoint is reached
 fixSolver :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a

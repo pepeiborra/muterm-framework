@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -37,10 +38,13 @@ ProofF(..), Proof
 , success, singleP, andP, dontKnow, refuted, mand, mprod
 , isSuccess, runProof
 
+-- * Evaluation strategies
+, parAnds
 ) where
 
 import Control.Applicative
 import Control.DeepSeq
+import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), msum, liftM, join, (>>=))
 import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
 import Control.Applicative((<$>))
@@ -69,7 +73,7 @@ data ProofF info (m :: * -> *) (k :: *) =
   | Success {procInfo, problem :: !(SomeInfo info)}
   | Refuted {procInfo, problem :: !(SomeInfo info)}
   | DontKnow{procInfo, problem :: !(SomeInfo info)}
-  | Search (m k)
+  | Search !(m k)
   | MAnd  k k
   | MDone
 --  deriving (Functor, Foldable, Traversable)
@@ -166,7 +170,7 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
 
 instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
-    mplus p1 p2 = Impure (Search (mplus (return p1) (return p2)))
+    mplus !p1 p2 = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show
 -----------------------------------------------------------------------------
@@ -240,3 +244,14 @@ isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
 -- | Apply the evaluation returning the relevant proof subtree
 runProof :: MonadPlus mp => Proof info mp a -> mp (Proof info m ())
 runProof = foldFree (const mzero) evalSolF'
+
+-- Evaluation Strategies
+-- Evaluate and branches in parallel
+parAnds :: Strategy (Proof info m a)
+parAnds (Pure p) = return (Pure p)
+parAnds (Impure i) = liftM Impure (f i) where
+   f (And    pi p pp)= And    pi p <$> parList parAnds pp
+   f (Single pi p k) = Single pi p <$> parAnds k
+   f (MAnd p1 p2)    = MAnd <$> Par (p1 `using` parAnds) <*> Par (p2 `using` parAnds)
+   f it = return it
+

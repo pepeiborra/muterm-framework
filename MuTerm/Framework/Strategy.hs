@@ -14,7 +14,15 @@
 --
 -----------------------------------------------------------------------------
 
-module MuTerm.Framework.Strategy where
+
+module MuTerm.Framework.Strategy (
+   (.|.), (.||.), (.|||.),
+   (.&.),
+   final,
+   try,
+   simultaneously, parallelize,
+   fixSolver, repeatSolver
+  ) where
 
 import MuTerm.Framework.Proof(Proof)
 
@@ -53,6 +61,12 @@ import MuTerm.Framework.Proof
 
 infixr 5 .|., .||., .|||.
 infixr 5 .&.
+
+parallelize :: (a -> Proof info mp a) -> a -> Proof info mp a
+parallelize = (simultaneously .)
+
+simultaneously :: Proof info mp a -> Proof info mp a
+simultaneously = withStrategy parAnds
 
 -- | Apply a strategy until a fixpoint is reached
 fixSolver :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a

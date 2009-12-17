@@ -8,7 +8,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Proof
@@ -48,15 +47,11 @@ import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), msum, liftM, join, (>>=))
 import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
 import Control.Applicative((<$>))
+import Data.Foldable (Foldable(..), toList)
+import Data.Traversable as T (Traversable(..), foldMapDefault)
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.PrettyPrint.HughesPJClass
-
-import Data.DeriveTH
-import Data.Derive.Functor
-import Data.Derive.Traversable
-import Data.Foldable (Foldable(..), toList)
-import Data.Traversable as T (Traversable(..), foldMapDefault)
 
 import MuTerm.Framework.Problem
 

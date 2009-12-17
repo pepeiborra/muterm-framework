@@ -37,9 +37,14 @@ Library
                  parallel > 2,
                  prettyclass,
                  xhtml,
-                 derive,
                  fgl,
                  graphviz == 2999.1.0.2,
                  dotgen == 0.3.1
 
-  ghc-options:   	-O2 -threaded 
+  if impl(ghc > 6.12)
+     Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving
+     cpp-options: -DGHC612
+  else
+     Extensions: TemplateHaskell
+     build-depends: derive > 2
+     cpp-options: -DDERIVE

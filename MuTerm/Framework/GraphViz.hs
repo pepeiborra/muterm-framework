@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
 
 -----------------------------------------------------------------------------
@@ -27,9 +26,6 @@ import Control.Arrow (first)
 import Control.Monad
 import Control.Monad.Free
 
-import Data.DeriveTH
-import Data.Derive.Functor
-import Data.Derive.Traversable
 import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(traverse))
 import qualified Data.Traversable as T
@@ -47,6 +43,12 @@ import Data.GraphViz.Attributes
 import qualified Text.Dot
 import Text.Dot hiding (node, edge, attribute)
 import Text.PrettyPrint.HughesPJClass (text)
+
+#ifdef DERIVE
+import Data.DeriveTH
+import Data.Derive.Functor
+import Data.Derive.Traversable
+#endif
 
 import Prelude hiding (unlines)
 
@@ -256,6 +258,12 @@ repG (Text t att) = textNode t att
 -- -----------------
 -- Derived instances
 -- -----------------
+#ifdef DERIVE
 $(derive makeFunctor     ''DotGrF)
 $(derive makeFoldable    ''DotGrF)
 $(derive makeTraversable ''DotGrF)
+#else
+deriving instance Functor DotGrF
+deriving instance Foldable DotGrF
+deriving instance Traversable DotGrF
+#endif

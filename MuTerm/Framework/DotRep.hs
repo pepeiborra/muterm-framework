@@ -55,7 +55,9 @@ renderDot = concatMap escapeNewLines . (`shows` "\\l")
         escapeNewLines '\n' = "\\l"
         escapeNewLines c    = [c]
 
-
+-- ------------------------
+-- *Info constraints
+-- ------------------------
 
 -- | Dot instance witness
 data DotInfo

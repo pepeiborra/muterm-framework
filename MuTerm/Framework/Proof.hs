@@ -88,10 +88,6 @@ instance NFData a => NFData (ProofF info m a) where
   rnf (MAnd p1 p2) = rnf p1 `seq` rnf p2 `seq` ()
   rnf MDone = ()
 
-instance (NFData a, NFData (f(Free f a))) => NFData (Free f a) where
-  rnf (Pure a) = rnf a `seq` ()
-  rnf (Impure fa) = rnf fa `seq` ()
-
 -- ------------------------------
 -- Parameterized super classes
 -- ------------------------------

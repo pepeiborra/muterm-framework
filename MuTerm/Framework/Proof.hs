@@ -39,12 +39,13 @@ ProofF(..), Proof
 
 -- * Evaluation strategies
 , parAnds
+, sliceProof
 ) where
 
 import Control.Applicative
 import Control.DeepSeq
 import Control.Parallel.Strategies
-import Control.Monad as M (MonadPlus(..), msum, liftM, join, (>>=))
+import Control.Monad as M (MonadPlus(..), msum, guard, liftM, join, (>>=))
 import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
 import Control.Applicative((<$>))
 import Data.Foldable (Foldable(..), toList)
@@ -247,3 +248,13 @@ parAnds (Impure i) = liftM Impure (f i) where
    f (MAnd p1 p2)    = MAnd <$> Par (p1 `using` parAnds) <*> Par (p2 `using` parAnds)
    f it = return it
 
+-- | Evaluates the needed branches of a proof removing the unsuccesful ones.
+--   Useful for things like displaying a failed proof.
+sliceProof :: IsMZero mp => Proof info mp a -> Proof info mp a
+sliceProof = foldFree return (Impure . f) where
+    f (Or  p pi pp) = Or  p pi (pp >>= \p -> guard (not $ isSuccess p) >> return p)
+    f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
+    f (MAnd     p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
+    f x = x
+    takeWhileAndOneMore _ []     = []
+    takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]

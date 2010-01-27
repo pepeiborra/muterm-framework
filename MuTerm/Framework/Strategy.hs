@@ -51,7 +51,7 @@ import MuTerm.Framework.Proof
                parPair rwhnf rwhnf)
 
 -- | deep parallel Or strategy combinator
-(.|||.) :: (NFData a, MonadPlus m) => (t -> Proof info m a) -> (t -> Proof info m a) -> t -> Proof info m a
+(.|||.) :: (NFData (Proof info m a), MonadPlus m) => (t -> Proof info m a) -> (t -> Proof info m a) -> t -> Proof info m a
 (f .|||. g) m = uncurry mplus ((f m, g m)
                   `using`
                parPair rdeepseq rdeepseq)

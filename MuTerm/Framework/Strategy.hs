@@ -87,6 +87,12 @@ try n x = case apply n x of
             Impure (Search m) -> Impure (Search (m `mplus` (return.return) x))
             res               -> res
 
+lfp :: (Eq prob, Info info prob, Processor info processor prob prob, MonadPlus mp) =>
+       processor -> prob -> Proof info mp prob
+lfp proc prob = do
+  prob' <- try proc prob
+  if prob == prob' then return prob' else lfp proc prob'
+
 -- | If we have branches in the strategy that arrive to different kind
 -- of problems, we have to close each branch with the same type
 final _ = return ()

@@ -21,7 +21,8 @@ module MuTerm.Framework.Strategy (
    final,
    try,
    simultaneously, parallelize,
-   fixSolver, repeatSolver
+   fixSolver, repeatSolver,
+   lfp
   ) where
 
 import MuTerm.Framework.Proof(Proof)
@@ -33,6 +34,13 @@ import Control.Parallel.Strategies
 import Data.Traversable (Traversable, traverse)
 import MuTerm.Framework.Processor
 import MuTerm.Framework.Proof
+
+-----------------------------------------------------------------------------
+-- Data
+-----------------------------------------------------------------------------
+
+-- | The final processor ends the strategy
+data FinalProcessor  = FinalProcessor
 
 -----------------------------------------------------------------------------
 -- Functions
@@ -95,4 +103,4 @@ lfp proc prob = do
 
 -- | If we have branches in the strategy that arrive to different kind
 -- of problems, we have to close each branch with the same type
-final _ = return ()
+final _ = return FinalProcessor

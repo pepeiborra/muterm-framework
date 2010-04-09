@@ -18,7 +18,7 @@
 module MuTerm.Framework.Strategy (
    (.|.), (.||.), (.|||.),
    (.&.),
-   final,
+   final, FinalProcessor,
    try,
    simultaneously, parallelize,
    fixSolver, repeatSolver,

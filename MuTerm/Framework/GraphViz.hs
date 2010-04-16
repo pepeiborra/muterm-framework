@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -230,8 +230,8 @@ annotate p i = fmap fst . foldFree (\x -> Pure (x,p x))
 -- ----------------------------------
 -- Graphing fgl graphs
 -- ----------------------------------
-
-repG Nodes{..}    = do
+repG Nodes{nodes} | null(G.nodes nodes) = error "repG: empty nodes graph"
+repG Nodes{..} = do
   (c,(a,b)) <- cluster $ do
     maybe (return ()) (\(d,atts) -> mapM_ attribute (label d : atts)) legend
     mapM_ attribute attributes
@@ -240,9 +240,11 @@ repG Nodes{..}    = do
                    let Just n1' = Map.lookup n1 table
                        Just n2' = Map.lookup n2 table
                    edge n1' n2' atts
-    let Just a = Map.lookup (head $ G.nodes nodes) table
-        Just b = Map.lookup (last $ G.nodes nodes) table
-    return (a, b)
+    case (Map.lookup incoming table, Map.lookup outgoing table) of
+      (Just a, Just b) -> return (a,b)
+      (Nothing,_)      -> error "invalid incoming node"
+      (_,Nothing)      -> error "invalid outgoing node"
+
   return (ClusterNode a b c)
 
 repG (Text t att) = textNode t att

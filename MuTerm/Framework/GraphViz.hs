@@ -116,12 +116,9 @@ edge n1 n2 = Text.Dot.edge n1 n2 . map showA
 attribute :: Attribute -> Dot ()
 attribute = Text.Dot.attribute . showA
 
-showA att = (name,val')
+showA att = (name,val)
    where  (name, _:val) = (takeWhile (/= '=') attRep, dropWhile (/= '=') attRep)
           attRep = show att
-          val' = case val of
-                  '"':rest -> init rest
-                  _ -> val
 
 -- -------------------------------
 -- Monoidal DotGen Graphs

@@ -38,8 +38,8 @@ mkDerivedProblem, mkDerivedDPProblem
 
 class Functor (Problem typ) => IsProblem typ where
     data Problem typ :: * -> *
-    getProblemType :: Problem typ trs -> typ
-    getR     :: Problem typ trs -> trs
+    getFramework :: Problem typ trs -> typ
+    getR         :: Problem typ trs -> trs
 
 class IsProblem typ => IsDPProblem typ where
     getP     :: Problem typ trs -> trs

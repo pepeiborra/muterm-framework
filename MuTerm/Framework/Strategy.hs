@@ -88,14 +88,14 @@ repeatSolver max f = go max where
   go n x = let x' = f x in (x' >>= go (n-1))
 
 -- | Try to apply a strategy and if it fails return the problem unmodified
-try :: (Info info typ, Processor info processor typ typ, MonadPlus mp) =>
+try :: (Info info typ, Processor info processor typ typ, MonadPlus mp, Traversable mp) =>
        processor -> typ -> Proof info mp typ
 try n x = case apply n x of
             Impure DontKnow{} -> return x
             Impure (Search m) -> Impure (Search (m `mplus` (return.return) x))
             res               -> res
 
-lfp :: (Eq prob, Info info prob, Processor info processor prob prob, MonadPlus mp) =>
+lfp :: (Eq prob, Info info prob, Processor info processor prob prob, MonadPlus mp, Traversable mp) =>
        processor -> prob -> Proof info mp prob
 lfp proc prob = do
   prob' <- try proc prob

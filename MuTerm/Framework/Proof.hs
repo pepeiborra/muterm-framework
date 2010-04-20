@@ -191,11 +191,11 @@ andP :: (Monad m, Info info p, Info info problem) => p -> problem -> [b] -> Proo
 andP pi p0 [] = success pi p0
 andP pi p0 pp = Impure (And (someInfo pi) (someProblem p0) (map return pp))
 
-mand :: Monad m => a -> a -> Proof info m a
-mand a b = Impure (MAnd (return a) (return b))
+mand :: Monad m => Proof info m a -> Proof info m a -> Proof info m a
+mand a b = Impure (MAnd a b)
 
-mprod :: Monad m => [a] -> Proof info m a
-mprod = P.foldr mand (Impure MDone) . map return where
+mprod :: Monad m => [Proof info m a] -> Proof info m a
+mprod = P.foldr mand (Impure MDone) where
   mand a (Impure MDone) = a
   mand a b = Impure (MAnd a b)
 

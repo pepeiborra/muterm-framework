@@ -18,7 +18,7 @@
 module MuTerm.Framework.Strategy (
    (.|.), (.||.), (.|||.),
    (.&.),
-   final, FinalProcessor,
+   final, Final,
    try,
    simultaneously, parallelize,
    fixSolver, repeatSolver,
@@ -39,8 +39,8 @@ import MuTerm.Framework.Proof
 -- Data
 -----------------------------------------------------------------------------
 
--- | The final processor ends the strategy
-data FinalProcessor  = FinalProcessor
+-- | Final is just a type level tag to signal the end of a processor chain
+data Final = Final
 
 -----------------------------------------------------------------------------
 -- Functions
@@ -103,4 +103,4 @@ lfp proc prob = do
 
 -- | If we have branches in the strategy that arrive to different kind
 -- of problems, we have to close each branch with the same type
-final _ = return FinalProcessor
+final _ = return Final

@@ -31,7 +31,6 @@ import Data.HashTable (hashString)
 import qualified Text.XHtml as H
 import Text.XHtml hiding (text)
 
-import MuTerm.Framework.DotRep
 import Text.PrettyPrint.HughesPJClass as Doc hiding (Style)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Proof
@@ -189,23 +188,4 @@ spani ident = H.thespan ! [H.theclass ident]
 divresult = spani "result" << "RESULT: "
 divyes    = divresult +++ spani "yes" << "YES. "
 divmaybe  = divresult +++ spani "maybe" << "Fail. "
-
-
--- ----
--- Dot
--- ----
-
-instance (IsDPProblem typ, Pretty rules) => DotRep (Problem typ [rules]) where
-  dot p = Text rep atts where
-    atts = [ Shape BoxShape
-           , Style (Stl Bold Nothing)
-           , FontName "monospace"
-           , FontSize 10
-           , Margin (PVal (PointD 0.2 0.2))]
-    rep = vcat
-     [parens( text "PAIRS" $$
-             nest 1 (vcat $ map pPrint (getP p)))
-     ,parens( text "RULES" $$
-             nest 1 (vcat $ map pPrint (getR p)))
-     ]
 

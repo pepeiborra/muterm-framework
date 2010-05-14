@@ -42,7 +42,7 @@ import Data.Graph.Inductive.Tree
 import Data.GraphViz.Attributes
 import qualified Text.Dot
 import Text.Dot hiding (node, edge, attribute)
-import Text.PrettyPrint.HughesPJClass (text)
+import Text.PrettyPrint.HughesPJClass as Doc hiding (Style)
 
 #ifdef DERIVE
 import Data.DeriveTH
@@ -55,6 +55,21 @@ import Prelude hiding (unlines)
 import MuTerm.Framework.DotRep
 import MuTerm.Framework.Proof
 import MuTerm.Framework.Problem
+
+instance (IsDPProblem typ, Pretty rules) => DotRep (Problem typ [rules]) where
+  dot p = Text rep atts where
+    atts = [ Shape BoxShape
+           , Style (Stl Bold Nothing)
+           , FontName "monospace"
+           , FontSize 10
+           , Margin (PVal (PointD 0.2 0.2))]
+    rep = vcat
+     [parens( text "PAIRS" $$
+             nest 1 (vcat $ map pPrint (getP p)))
+     ,parens( text "RULES" $$
+             nest 1 (vcat $ map pPrint (getR p)))
+     ]
+
 
 g  = repG . dot
 gs = repG . dotSimple
@@ -227,7 +242,7 @@ annotate p i = fmap fst . foldFree (\x -> Pure (x,p x))
 -- ----------------------------------
 -- Graphing fgl graphs
 -- ----------------------------------
-repG Nodes{nodes} | null(G.nodes nodes) = error "repG: empty nodes graph"
+repG Nodes{..} | null(G.nodes nodes) = error "repG: empty nodes graph"
 repG Nodes{..} = do
   (c,(a,b)) <- cluster $ do
     maybe (return ()) (\(d,atts) -> mapM_ attribute (label d : atts)) legend

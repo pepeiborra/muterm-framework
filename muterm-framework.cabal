@@ -18,6 +18,8 @@ source-repository head
   type:     git
   location: git://github.com/pepeiborra/muterm-framework.git
 
+Flag graphs
+  default: False
 
 Library
   exposed-modules:
@@ -26,9 +28,7 @@ Library
     MuTerm.Framework.Processor,
     MuTerm.Framework.Proof,
     MuTerm.Framework.Strategy,
-    MuTerm.Framework.DotRep,
-    MuTerm.Framework.Output,
-    MuTerm.Framework.GraphViz
+    MuTerm.Framework.Output
 
   build-depends: base -any,
                  control-monad-free >= 0.4,
@@ -37,7 +37,12 @@ Library
                  parallel > 2,
                  prettyclass,
                  xhtml,
-                 fgl,
+                 fgl
+  if flag(graphs) 
+    exposed-modules:
+      MuTerm.Framework.DotRep,
+      MuTerm.Framework.GraphViz
+    build-depends:
                  graphviz == 2999.1.0.2,
                  dotgen == 0.3.1
 

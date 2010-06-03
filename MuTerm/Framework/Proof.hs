@@ -56,6 +56,7 @@ import Text.PrettyPrint.HughesPJClass
 
 import MuTerm.Framework.Problem
 
+import qualified Data.Foldable as F
 
 import Prelude as P
 
@@ -250,11 +251,18 @@ parAnds (Impure i) = liftM Impure (f i) where
 
 -- | Evaluates the needed branches of a proof removing the unsuccesful ones.
 --   Useful for things like displaying a failed proof.
-sliceProof :: IsMZero mp => Proof info mp a -> Proof info mp a
+sliceProof :: (Foldable mp, IsMZero mp) => Proof info mp a -> Proof info mp a
 sliceProof = foldFree return (Impure . f) where
-    f (Or  p pi pp) = Or  p pi (pp >>= \p -> guard (not $ isSuccess p) >> return p)
+    f (Or  p pi pp) = Or  p pi (takeWhileMP (not.isSuccess) pp)
     f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
     f (MAnd     p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
+--    f (Search m) = Search (takeWhileMP (not.isSuccess) m)
+    f (Search m) = Search mzero
     f x = x
     takeWhileAndOneMore _ []     = []
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
+
+takeWhileMP :: (Foldable m, MonadPlus m) => (a -> Bool) -> m a -> m a
+takeWhileMP p = F.foldr f mzero
+  where
+    f x acc  = if p x then return x `mplus` acc else mzero

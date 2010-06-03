@@ -35,6 +35,8 @@ import Text.PrettyPrint.HughesPJClass as Doc hiding (Style)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Proof
 
+instance Pretty Doc where pPrint = id
+
 -- ----
 -- Text
 -- ----
@@ -42,86 +44,49 @@ import MuTerm.Framework.Proof
 instance (Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
 instance (Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
 
-pprProofF = f where
-      f Success{..} =
+pprProofF Success{..} =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo $$
         text ("RESULT: Problem solved succesfully")
-      f Refuted{..} =
+pprProofF Refuted{..} =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo  $$
         text ("RESULT: Termination could be refuted.")
-      f DontKnow{..} =
+pprProofF DontKnow{..} =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo  $$
         text ("RESULT: Don't know.")
 {-
-      f (Or proc prob sub) =
+pprProofF (Or proc prob sub) =
         pPrint prob $$
         text "PROCESSOR: " <> pPrint proc $$
         text ("Problem was translated to " ++ show (length sub) ++ " equivalent problems.") $$
         nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
 -}
-      f (And proc prob sub)
+pprProofF (And proc prob sub)
        | length sub > 1 =
         pPrint prob $$
         text "PROCESSOR: " <> pPrint proc $$
         text ("Problem was divided in " ++ show (length sub) ++ " subproblems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
+        nest 4 (vcat $ punctuate (text "\n") $ map pPrint sub)
        | otherwise =
         pPrint prob $$
         text "PROCESSOR: " <> pPrint proc $$
-        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
-      f (Single{..}) =
+        nest 4 (vcat $ punctuate (text "\n") $ map pPrint sub)
+pprProofF (Single{..}) =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo $$
-        nest 8 (pPrint subProblem)
-      f (MAnd p1 p2) =
+        nest 4 (pPrint subProblem)
+pprProofF (MAnd p1 p2) =
         text ("Problem was divided in 2 subproblems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map pPrint [p1,p2])
-      f MDone = text "Done"
-      f (Search sub) = text "Trying something different"
+        nest 4 (pPrint p1 $$ pPrint p2)
+pprProofF MDone = text "Done"
+pprProofF (Search sub) = text "Trying something different"
 
 -- | Gives more information on the attempted failed branches
 pprProofFailures = foldFree (const Doc.empty) f . sliceProof where
-      f Success{..} =
-        pPrint problem $$
-        text "PROCESSOR: " <> pPrint procInfo $$
-        text ("RESULT: Problem solved succesfully")
-      f Refuted{..} =
-        pPrint problem $$
-        text "PROCESSOR: " <> pPrint procInfo  $$
-        text ("RESULT: Termination could be refuted.")
-      f DontKnow{..} =
-        pPrint problem $$
-        text "PROCESSOR: " <> pPrint procInfo  $$
-        text ("RESULT: Don't know.")
-{-
-      f (Or proc prob sub) =
-        pPrint prob $$
-        text "PROCESSOR: " <> pPrint proc $$
-        text ("Problem was translated to " ++ show (length sub) ++ " equivalent problems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
--}
-      f (And proc prob sub)
-       | length sub > 1 =
-        pPrint prob $$
-        text "PROCESSOR: " <> pPrint proc $$
-        text ("Problem was divided in " ++ show (length sub) ++ " subproblems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ sub)
-       | otherwise =
-        pPrint prob $$
-        text "PROCESSOR: " <> pPrint proc $$
-        nest 8 (vcat $ punctuate (text "\n") $ sub)
-      f (Single{..}) =
-        pPrint problem $$
-        text "PROCESSOR: " <> pPrint procInfo $$
-        nest 8 subProblem
-      f (MAnd p1 p2) =
-        text ("Problem was divided in 2 subproblems.") $$
-        nest 8 (p1 $$ p2)
-      f MDone = text "Done"
       f (Search sub) = vcat . intersperse (text "Trying something different") . toList $ sub
+      f x = pprProofF x
 
 --------------
 -- HTML

@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
 
 -----------------------------------------------------------------------------
@@ -35,9 +36,9 @@ import qualified Data.Set as Set
 import Data.List hiding (unlines)
 import Data.Maybe
 import Data.Monoid
-import Data.Traversable (Traversable)
+import Data.Traversable as T (Traversable, mapM, mapM)
 
-import Data.Graph.Inductive as G
+import Data.Graph.Inductive as G hiding (node') 
 import Data.Graph.Inductive.Tree
 import Data.GraphViz.Attributes
 import qualified Text.Dot
@@ -81,7 +82,7 @@ gs = repG . dotSimple
 data DotProof = DotProof { showFailedPaths :: Bool }
 dotProof = dotProof' DotProof{showFailedPaths=False}
 
-dotProof' :: (IsMZero mp, DotRep (SomeInfo info)) => DotProof -> Proof info mp a -> String
+dotProof' :: (IsMZero mp, Traversable mp, DotRep (SomeInfo info)) => DotProof -> Proof info mp a -> String
 dotProof' DotProof{..} p = showDot $ do
                              attribute (Size (Point 100 100))
                              attribute (Compound True)
@@ -111,10 +112,21 @@ dotProof' DotProof{..} p = showDot $ do
    f (Annotated done Single{..})
       | done || showFailedPaths = colorJoin done [g problem, g procInfo] ->> subProblem
       | otherwise               = colorJoin done [g procInfo] ->> subProblem
-   f (Annotated done (Search mk)) = colorJoin False [textNode (text " ") []]
+
+--   f (Annotated done (Search mk)) = colorJoin False [textNode (text " ") []]
+   f (Annotated done (Search mk)) = do
+        me <- node' [label $ text"?"] done
+        T.mapM (return me ->>) mk
+        return me
+
+   g  = repG . dot
+   gs = repG . dotSimple
 
 colorJoin True  = foldMap (liftM (ParamJoin [Color $ mkColor "green"]))
 colorJoin False = foldMap (liftM (ParamJoin [Color $ mkColor "red"]))
+
+node' atts True  = ParamJoin [Color $ mkColor "green"] `liftM` node atts
+node' atts False = ParamJoin [Color $ mkColor "red"]   `liftM` node atts
 
 -- ----------------------------------------------------------------
 -- dotgen constructors with a proper enumerated type for attributes

@@ -38,6 +38,8 @@ Library
                  parallel > 2,
                  prettyclass,
                  xhtml,
+                 tag-bits
+
   if flag(graphs) 
     exposed-modules:
       MuTerm.Framework.DotRep,

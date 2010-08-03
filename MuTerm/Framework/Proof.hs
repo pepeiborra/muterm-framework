@@ -39,19 +39,19 @@ ProofF(..), Proof
 
 -- * Evaluation strategies
 , parAnds
-, sliceProof
+, sliceProof, unsafeSliceProof
 ) where
 
 import Control.Applicative
 import Control.DeepSeq
 import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), msum, guard, liftM, join, (>>=))
-import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
+import Control.Monad.Free (MonadFree(..), Free (..), foldFree, evalFree)
 import Control.Applicative((<$>))
 import Data.Foldable (Foldable(..), toList)
+import Data.TagBits
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
-import System.IO.Unsafe (unsafePerformIO)
 import Text.PrettyPrint.HughesPJClass
 
 import MuTerm.Framework.Problem
@@ -249,20 +249,39 @@ parAnds (Impure i) = liftM Impure (f i) where
    f (MAnd p1 p2)    = MAnd <$> Par (p1 `using` parAnds) <*> Par (p2 `using` parAnds)
    f it = return it
 
--- | Evaluates the needed branches of a proof removing the unsuccesful ones.
+-- | Approximately slices a proof to keep only the evaluated branches.
 --   Useful for things like displaying a failed proof.
-sliceProof :: (Foldable mp, IsMZero mp) => Proof info mp a -> Proof info mp a
-sliceProof = foldFree return (Impure . f) where
-    f (Or  p pi pp) = Or  p pi (takeWhileMP (not.isSuccess) pp)
-    f (And p pi pp) = (And p pi $ takeWhileAndOneMore isSuccess pp)
-    f (MAnd     p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
---    f (Search m) = Search (takeWhileMP (not.isSuccess) m)
-    f (Search m) = Search mzero
+sliceProof,unsafeSliceProof :: (Functor mp, Foldable mp, IsMZero mp) => Proof info mp a -> Proof info mp a
+sliceProof p = foldFree return (Impure . f) p where
+    f (And p pi pp) = And p pi $ takeWhileAndOneMore isSuccess pp
+    f (MAnd  p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
+    f (Or  p pi pp) = Or  p pi $ takeWhileMP (not.isSuccess) pp
+    f (Search m)    = Search   $ takeWhileMP (not.isSuccess) m
     f x = x
     takeWhileAndOneMore _ []     = []
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
 
-takeWhileMP :: (Foldable m, MonadPlus m) => (a -> Bool) -> m a -> m a
+-- | Slices a proof to keep only the evaluated branches.
+--   Uses the impure 'unsafeIsEvaluated' function from the tag-bits package to discern evaluated subtrees.
+--   Regardless its name, 'unsafeSliceProof' is actually safe.
+unsafeSliceProof = evalFree return (Impure . f) where
+    f (And p pi pp) = let pp' = filterMP unsafeIsEvaluated pp in
+                      And p pi $ map unsafeSliceProof $ takeWhileAndOneMore isSuccess pp'
+    f (MAnd  p1 p2) = if not(isSuccess p1)
+                       then Search (return $ sliceProof p1)
+                      else (MAnd (sliceProof p1) (sliceProof p2))
+    f (Or  p pi pp) = Or  p pi $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) pp
+    f (Search m)    = Search   $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) m
+    f x = x
+
+    takeWhileAndOneMore _ []     = []
+    takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
+    infixr 3 .&.
+    f .&. g = \x -> f x && g x
+
+filterMP, takeWhileMP :: (Foldable m, MonadPlus m) => (a -> Bool) -> m a -> m a
 takeWhileMP p = F.foldr f mzero
   where
     f x acc  = if p x then return x `mplus` acc else mzero
+
+filterMP p = F.foldr f mzero where f x acc = if p x then return x `mplus` acc else acc

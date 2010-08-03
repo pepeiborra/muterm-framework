@@ -20,6 +20,7 @@ source-repository head
 
 Flag graphs
   default: False
+  description: support for generating graphviz documents from proofs
 
 Library
   exposed-modules:
@@ -37,14 +38,15 @@ Library
                  parallel > 2,
                  prettyclass,
                  xhtml,
-                 fgl
   if flag(graphs) 
     exposed-modules:
       MuTerm.Framework.DotRep,
       MuTerm.Framework.GraphViz
     build-depends:
                  graphviz == 2999.1.0.2,
-                 dotgen == 0.3.1
+                 dotgen == 0.3.1,
+                 fgl
+
 
   if impl(ghc > 6.12)
      Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving

@@ -18,10 +18,6 @@ source-repository head
   type:     git
   location: git://github.com/pepeiborra/muterm-framework.git
 
-Flag graphs
-  default: False
-  description: support for generating graphviz documents from proofs
-
 Library
   exposed-modules:
     MuTerm.Framework.Problem,
@@ -40,16 +36,6 @@ Library
                  xhtml,
                  tag-bits,
                  suitable
-
-  if flag(graphs) 
-    exposed-modules:
-      MuTerm.Framework.DotRep,
-      MuTerm.Framework.GraphViz
-    build-depends:
-                 graphviz == 2999.1.0.2,
-                 dotgen == 0.3.1,
-                 fgl
-
 
   if impl(ghc > 6.12)
      Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving

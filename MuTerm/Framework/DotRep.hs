@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE UndecidableInstances, OverlappingInstances, FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -21,10 +22,12 @@ module MuTerm.Framework.DotRep
     ( module MuTerm.Framework.DotRep,
       module Data.GraphViz.Attributes) where
 
+import Control.Applicative
 import qualified Data.Graph
 import Data.GraphViz.Attributes
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Tree
+import Data.Suitable
 import Text.PrettyPrint.HughesPJClass
 
 import MuTerm.Framework.Proof
@@ -60,21 +63,27 @@ renderDot = concatMap escapeNewLines . (`shows` "\\l")
 -- ------------------------
 
 -- | Dot instance witness
-data DotInfo
-instance DotRep p => Info DotInfo p where
-  data InfoConstraints DotInfo p = DotRep p => DotInfo
-  constraints = DotInfo
+newtype DotF a = DotF a deriving (Functor, DotRep, Pretty)
 
-instance DotRep (SomeInfo DotInfo) where
-    dot (SomeInfo p) = withInfoOf p $ \DotInfo -> dot p
-    dotSimple (SomeInfo p) = withInfoOf p $ \DotInfo -> dotSimple p
+instance Applicative DotF where
+  pure = DotF
+  DotF f <*> DotF a = DotF (f a)
+
+data instance Constraints DotF a = DotRep a => DotConstraint
+instance DotRep p => Suitable DotF p where constraints = DotConstraint
+
+instance DotRep (SomeInfo DotF) where
+    dot (SomeInfo p) = withConstraintsOf p $ \DotConstraint -> dot p
+    dotSimple (SomeInfo p) = withConstraintsOf p $ \DotConstraint -> dotSimple p
+
+
 
 -- Tuple instances
 
-instance DotRep (SomeInfo (DotInfo, a)) where
-    dot (SomeInfo (p::p)) = withInfoOf p $ \(DotInfo :^: (_::InfoConstraints a p)) -> dot p
-    dotSimple (SomeInfo (p::p)) = withInfoOf p $ \(DotInfo :^: (_::InfoConstraints a p)) -> dotSimple p
+-- instance DotRep (SomeInfo (DotInfo, a)) where
+--     dot (SomeInfo (p::p)) = withInfoOf p $ \(DotInfo :^: (_::InfoConstraints a p)) -> dot p
+--     dotSimple (SomeInfo (p::p)) = withInfoOf p $ \(DotInfo :^: (_::InfoConstraints a p)) -> dotSimple p
 
-instance DotRep (SomeInfo (a,DotInfo)) where
-    dot (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dot p
-    dotSimple (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dotSimple p
+-- instance DotRep (SomeInfo (a,DotInfo)) where
+--     dot (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dot p
+--     dotSimple (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: DotInfo) -> dotSimple p

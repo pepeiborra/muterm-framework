@@ -38,7 +38,8 @@ Library
                  parallel > 2,
                  prettyclass,
                  xhtml,
-                 tag-bits
+                 tag-bits,
+                 suitable
 
   if flag(graphs) 
     exposed-modules:

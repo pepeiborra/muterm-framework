@@ -8,6 +8,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Proof
@@ -28,8 +29,7 @@ module MuTerm.Framework.Proof (
 
 ProofF(..), Proof
 
-, Info(..), InfoConstraints (..), withInfoOf, PrettyInfo
-, SomeInfo (..), someInfo
+, SomeInfo (..), someInfo, Info, PrettyF
 , IsMZero(..)
 
 -- * Exported functions
@@ -46,9 +46,10 @@ import Control.Applicative
 import Control.DeepSeq
 import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), msum, guard, liftM, join, (>>=))
-import Control.Monad.Free (MonadFree(..), Free (..), foldFree, evalFree)
+import Control.Monad.Free (MonadFree(..), Free (..), foldFree, evalFree, mapFree)
 import Control.Applicative((<$>))
 import Data.Foldable (Foldable(..), toList)
+import Data.Suitable
 import Data.TagBits
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
@@ -93,45 +94,41 @@ instance NFData a => NFData (ProofF info m a) where
 -- ------------------------------
 -- Parameterized super classes
 -- ------------------------------
-
--- Instance witnesses
-class Info info p where
-  data InfoConstraints info p
-  constraints :: InfoConstraints info p
-
-withInfoOf :: Info info a => a -> (InfoConstraints info a -> b) -> b
-withInfoOf _ f = f constraints
-
+class    (Applicative f, Suitable f a) => Info f a
+instance (Applicative f, Suitable f a) => Info f a
 
 -- | Pretty printing info witness
-data PrettyInfo
-instance Pretty p => Info PrettyInfo p where
-  data InfoConstraints PrettyInfo p = Pretty p => PrettyInfo
-  constraints = PrettyInfo
+newtype PrettyF a = PrettyF a deriving (Functor, Pretty)
+instance Applicative PrettyF where
+  pure = PrettyF
+  PrettyF f <*> PrettyF a = PrettyF (f a)
 
--- | Tuples of information witnesses
-instance (Info i a, Info j a) => Info (i,j) a where
-  data InfoConstraints (i,j) a = (:^:) (InfoConstraints i a) (InfoConstraints j a)
-  constraints = constraints :^: constraints
+data instance Constraints PrettyF a = Pretty a => PrettyDict
+instance Pretty p => Suitable PrettyF p where constraints = PrettyDict
+
+-- -- | Tuples of information witnesses
+-- data instance InfoConstraints (i,j) a = (:^:) (InfoConstraints i a) (InfoConstraints j a)
+-- instance (Info i a, Info j a) => Info (i,j) a where
+--   constraints = constraints :^: constraints
 
 -- ------------------------
 -- Existential Wrappers
 -- ------------------------
 
--- | 'SomeInfo' hides the type of the proccesor info
-data SomeInfo info where
-    SomeInfo :: Info info p => p -> SomeInfo info
+-- | 'SomeInfo' existentially wraps a value together with a dictionary for a set of constraints
+data SomeInfo f where
+    SomeInfo :: Suitable f p => f p -> SomeInfo f
 
-instance Pretty (SomeInfo PrettyInfo) where
-    pPrint (SomeInfo p) = withInfoOf p $ \PrettyInfo -> pPrint p
+instance Pretty (SomeInfo PrettyF) where
+   pPrint (SomeInfo p) = withConstraintsOf p $ \PrettyDict -> pPrint p
 
 -- Tuple instances
 
-instance Pretty (SomeInfo (PrettyInfo, a)) where
-    pPrint (SomeInfo (p::p)) = withInfoOf p $ \(PrettyInfo :^: (_::InfoConstraints a p)) -> pPrint p
+-- instance Pretty (SomeInfo (PrettyI, a)) where
+--     pPrint (SomeInfo (p::p)) = withInfoOf p $ \(PrettyInfo :^: _) -> pPrint p
 
-instance Pretty (SomeInfo (a,PrettyInfo)) where
-    pPrint (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: PrettyInfo) -> pPrint p
+-- instance Pretty (SomeInfo (a,PrettyI)) where
+--     pPrint (SomeInfo (p::p)) = withInfoOf p $ \((x::InfoConstraints a p) :^: PrettyInfo) -> pPrint p
 
 -----------------------------------------------------------------------------
 -- Instances
@@ -205,12 +202,12 @@ mprod = P.foldr mand (Impure MDone) where
 -- ---------
 
 -- | Pack the proof information
-someInfo :: Info info p => p -> SomeInfo info
-someInfo    = SomeInfo
+someInfo :: (Info f p) => p -> SomeInfo f
+someInfo = SomeInfo . pure
 
 -- | Pack the problem
-someProblem :: Info info p => p -> SomeInfo info
-someProblem = SomeInfo
+someProblem :: (Info f p) => p -> SomeInfo f
+someProblem = SomeInfo . pure
 
 -- | Obtain the solution, collecting the proof path in the way
 evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
@@ -246,25 +243,26 @@ parAnds (Pure p) = return (Pure p)
 parAnds (Impure i) = liftM Impure (f i) where
    f (And    pi p pp)= And    pi p <$> parList parAnds pp
    f (Single pi p k) = Single pi p <$> parAnds k
-   f (MAnd p1 p2)    = MAnd <$> Par (p1 `using` parAnds) <*> Par (p2 `using` parAnds)
+   f (MAnd p1 p2)    = MAnd <$> rpar (p1 `using` parAnds) <*> rpar (p2 `using` parAnds)
    f it = return it
 
 -- | Approximately slices a proof to keep only the evaluated branches.
 --   Useful for things like displaying a failed proof.
 sliceProof,unsafeSliceProof :: (Functor mp, Foldable mp, IsMZero mp) => Proof info mp a -> Proof info mp a
-sliceProof p = foldFree return (Impure . f) p where
+sliceProof = mapFree f where
     f (And p pi pp) = And p pi $ takeWhileAndOneMore isSuccess pp
     f (MAnd  p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
     f (Or  p pi pp) = Or  p pi $ takeWhileMP (not.isSuccess) pp
     f (Search m)    = Search   $ takeWhileMP (not.isSuccess) m
     f x = x
+
     takeWhileAndOneMore _ []     = []
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
 
 -- | Slices a proof to keep only the evaluated branches.
 --   Uses the impure 'unsafeIsEvaluated' function from the tag-bits package to discern evaluated subtrees.
 --   Regardless its name, 'unsafeSliceProof' is actually safe.
-unsafeSliceProof = evalFree return (Impure . f) where
+unsafeSliceProof = evalFree Pure (Impure . f) where
     f (And p pi pp) = let pp' = filterMP unsafeIsEvaluated pp in
                       And p pi $ map unsafeSliceProof $ takeWhileAndOneMore isSuccess pp'
     f (MAnd  p1 p2) = if not(isSuccess p1)

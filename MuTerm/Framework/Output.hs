@@ -23,11 +23,12 @@
 
 module MuTerm.Framework.Output where
 
+import Control.Applicative
 import Control.Monad.Free
 import Data.Foldable (Foldable, toList)
 import Data.List
 import Data.HashTable (hashString)
-
+import Data.Suitable
 import qualified Text.XHtml as H
 import Text.XHtml hiding (text)
 
@@ -41,7 +42,7 @@ instance Pretty Doc where pPrint = id
 -- Text
 -- ----
 
-instance (Pretty a) => Pretty (ProofF PrettyInfo mp a) where pPrint = pprProofF
+instance (Pretty a) => Pretty (ProofF PrettyF mp a) where pPrint = pprProofF
 instance (Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
 
 pprProofF Success{..} =
@@ -96,13 +97,18 @@ pprProofFailures = foldFree (const Doc.empty) f . sliceProof where
 instance Pretty a => HTML a where toHtml = toHtml . show . pPrint
 
 -- | HTML instance witness
-data HTMLInfo
-instance HTML p => Info HTMLInfo p where
-  data InfoConstraints HTMLInfo p = HTML p => HTMLInfo
-  constraints = HTMLInfo
+newtype HTMLInfo a = HTMLInfo a deriving Functor
+instance HTML a => HTML (HTMLInfo a) where toHtml (HTMLInfo a) = toHtml a
+instance Applicative HTMLInfo where
+  pure = HTMLInfo
+  HTMLInfo f <*> HTMLInfo a = HTMLInfo (f a)
+
+data instance Constraints HTMLInfo p = HTML p => HTMLConstraints
+instance HTML p => Suitable HTMLInfo p where
+  constraints = HTMLConstraints
 
 instance HTML (SomeInfo HTMLInfo) where
-    toHtml (SomeInfo p) = withInfoOf p $ \HTMLInfo -> toHtml p
+    toHtml (SomeInfo p) = withConstraintsOf p $ \HTMLConstraints -> toHtml p
 
 instance HTML Doc where toHtml = toHtml . show
 

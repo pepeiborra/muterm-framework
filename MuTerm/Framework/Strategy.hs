@@ -28,6 +28,7 @@ module MuTerm.Framework.Strategy (
 import MuTerm.Framework.Proof(Proof)
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad ((>=>), mplus, MonadPlus)
 import Control.Monad.Free
 import Control.Parallel.Strategies

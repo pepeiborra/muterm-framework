@@ -7,6 +7,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Output
@@ -94,7 +96,10 @@ pprProofFailures = foldFree (const Doc.empty) f . sliceProof where
 -------------
 
 -- | Dummy default instance
-instance Pretty a => HTML a where toHtml = toHtml . show . pPrint
+
+-- Can't have with Safe Haskell because it overlaps the [a] instance
+-- Grrr
+-- instance Pretty a => HTML a where toHtml = toHtml . show . pPrint
 
 -- | HTML instance witness
 newtype HTMLInfo a = HTMLInfo a deriving Functor

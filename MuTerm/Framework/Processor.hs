@@ -1,6 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE OverlappingInstances, UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Processor
@@ -18,12 +18,13 @@
 module MuTerm.Framework.Processor (
 
 -- * Exported classes
-
-Processor(..)
-
+InfoConstraint,
+Processor(..),
+Res
 ) where
 
 import Control.Monad
+import Data.Suitable
 import Data.Traversable (Traversable)
 import MuTerm.Framework.Proof (Proof,Info)
 import MuTerm.Framework.Problem
@@ -32,12 +33,28 @@ import MuTerm.Framework.Problem
 -- Classes
 -----------------------------------------------------------------------------
 
+type family InfoConstraint tag :: * -> *
 
--- | Each processor is an instance of the class 'Processor'. The
--- output problem depends of the input problem
-class Processor info tag o d | tag o -> info d where
-  apply       :: (MonadPlus mp, Traversable mp, Info info o, Info info d) => tag -> o -> Proof info mp d
-  applySearch :: (MonadPlus mp, Traversable mp, Info info o, Info info d) => tag -> o -> [Proof info mp d]
+type Res tag inp = Problem (Typ tag inp) (Trs tag inp)
+
+-- | Each processor is an instance of the class 'Processor'.
+--   The type of the output problem is determined by the type of the input problem
+class Processor tag inp where
+  type Typ tag inp
+  type Trs tag inp
+  apply       :: ( MonadPlus mp
+                 , Traversable mp
+                 , Info (InfoConstraint tag) inp
+                 , Info (InfoConstraint tag) (Res tag inp)
+                 ) =>
+                 tag -> inp ->  Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))
+
+  applySearch :: ( MonadPlus mp
+                 , Traversable mp
+                 , Info (InfoConstraint tag) inp
+                 , Info (InfoConstraint tag) (Res tag inp)
+                 ) =>
+                 tag -> inp -> [Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))]
 
   apply       tag p = msum (applySearch tag p)
   applySearch tag p = [apply tag p]

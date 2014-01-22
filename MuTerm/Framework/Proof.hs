@@ -125,7 +125,6 @@ instance Pretty (SomeInfo PrettyInfo) where
     pPrint (SomeInfo p) = withInfoOf p $ \PrettyInfo -> pPrint p
 
 -- Tuple instances
-
 instance Pretty (SomeInfo (PrettyInfo, a)) where
     pPrint (SomeInfo (p::p)) = withInfoOf p $ \(PrettyInfo :^: (_::InfoConstraints a p)) -> pPrint p
 
@@ -245,7 +244,7 @@ parAnds (Pure p) = return (Pure p)
 parAnds (Impure i) = liftM Impure (f i) where
    f (And    pi p pp)= And    pi p <$> parList parAnds pp
    f (Single pi p k) = Single pi p <$> parAnds k
-   f (MAnd p1 p2)    = MAnd <$> Par (p1 `using` parAnds) <*> Par (p2 `using` parAnds)
+   f (MAnd p1 p2)    = MAnd <$> rpar (p1 `using` parAnds) <*> rpar (p2 `using` parAnds)
    f it = return it
 
 -- | Evaluates the needed branches of a proof removing the unsuccesful ones.

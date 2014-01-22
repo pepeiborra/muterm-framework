@@ -26,7 +26,7 @@ module MuTerm.Framework.Output where
 import Control.Monad.Free
 import Data.Foldable (Foldable, toList)
 import Data.List
-import Data.HashTable (hashString)
+-- import Data.HashTable (hashString)
 
 import qualified Text.XHtml as H
 import Text.XHtml hiding (text)
@@ -128,7 +128,7 @@ pprProofFailures = foldFree (const Doc.empty) f . sliceProof where
 -------------
 
 -- | Dummy default instance
-instance Pretty a => HTML a where toHtml = toHtml . show . pPrint
+-- instance Pretty a => HTML a where toHtml = toHtml . show . pPrint
 
 -- | HTML instance witness
 data HTMLInfo

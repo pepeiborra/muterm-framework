@@ -28,6 +28,7 @@ module MuTerm.Framework.Strategy (
 import MuTerm.Framework.Proof(Proof)
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad ((>=>), mplus, MonadPlus)
 import Control.Monad.Free
 import Control.Parallel.Strategies
@@ -56,13 +57,13 @@ data FinalProcessor  = FinalProcessor
 (.||.) :: MonadPlus m => (t -> m a) -> (t -> m a) -> t -> m a
 (f .||. g) m = uncurry mplus ((f m, g m)
                   `using`
-               parPair rwhnf rwhnf)
+               parTuple2 rseq rseq)
 
 -- | deep parallel Or strategy combinator
 (.|||.) :: (NFData (Proof info m a), MonadPlus m) => (t -> Proof info m a) -> (t -> Proof info m a) -> t -> Proof info m a
 (f .|||. g) m = uncurry mplus ((f m, g m)
                   `using`
-               parPair rdeepseq rdeepseq)
+               parTuple2 rdeepseq rdeepseq)
 
 -- | And strategy combinator
 (.&.) :: Monad mp => (a -> Proof info mp b) -> (b -> Proof info mp c) -> a -> Proof info mp c

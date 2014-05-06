@@ -6,6 +6,7 @@
 {-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 
@@ -29,7 +30,6 @@ import Control.Applicative
 import Control.Monad.Free
 import Data.Foldable (Foldable, toList)
 import Data.List
-import Data.HashTable (hashString)
 import Data.Suitable
 import qualified Text.XHtml as H
 import Text.XHtml hiding (text)

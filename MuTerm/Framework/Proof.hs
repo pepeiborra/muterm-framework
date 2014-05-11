@@ -51,6 +51,7 @@ import Control.Monad as M (MonadPlus(..), msum, guard, liftM, join, (>>=))
 import Control.Monad.Free (MonadFree(..), Free (..), foldFree, evalFree, mapFree)
 import Control.Applicative((<$>))
 import Data.Foldable (Foldable(..), toList)
+import Data.Monoid
 import Data.Suitable
 import Data.TagBits
 import Data.Traversable as T (Traversable(..), foldMapDefault)
@@ -234,8 +235,15 @@ instance IsMZero Maybe where isMZero = isNothing
 isSuccess :: IsMZero mp => Proof info mp a -> Bool
 isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
 
+data EmptyF a deriving (Functor, Foldable, Traversable)
+
+instance Applicative EmptyF
+instance Monad EmptyF
+instance MonadPlus EmptyF
+instance IsMZero EmptyF where isMZero _ = True
+
 -- | Apply the evaluation returning the relevant proof subtree
-runProof :: MonadPlus mp => Proof info mp a -> mp (Proof info m ())
+runProof :: MonadPlus mp => Proof info mp a -> mp (Proof info EmptyF ())
 runProof = foldFree (const mzero) evalSolF'
 
 -- Evaluation Strategies

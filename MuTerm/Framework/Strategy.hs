@@ -90,15 +90,23 @@ repeatSolver max f = go max where
   go 0 x = return x
   go n x = let x' = f x in (x' >>= go (n-1))
 
--- | Try to apply a strategy and if it fails return the problem unmodified
-try n x = case n x of
-            Impure DontKnow{} -> return x
-            Impure (Search m) | isMZero m -> return x
-            res               -> res
+isFailedLayer proof =
+  case proof of
+            Impure DontKnow{} -> True
+            Impure (Search m) -> isMZero m
+            _ -> False
 
-lfp proc prob = do
-  prob' <- try proc prob
-  if prob == prob' then return prob' else lfp proc prob'
+-- | Try to apply a strategy and if it fails return the problem unmodified
+try :: IsMZero mp => (a -> Proof info mp a) -> a -> Proof info mp a
+try strat x = let res = strat x in if isFailedLayer res then return x else res
+
+-- | Take the largest fixpoint of a strategy
+lfp :: (IsMZero mp, Eq a) => (a -> Proof info mp a) -> a -> Proof info mp a
+lfp strat prob = do
+  let proof = strat prob
+  if isFailedLayer proof then return prob else do
+       prob' <- proof
+       if prob == prob' then return prob else lfp strat prob'
 
 -- | If we have branches in the strategy that arrive to different kind
 -- of problems, we have to close each branch with the same type

@@ -56,5 +56,5 @@ class Processor tag inp where
                  ) =>
                  tag -> inp -> [Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))]
 
-  apply       tag p = msum (applySearch tag p)
+  apply       tag p = case applySearch tag p of [p'] -> p' ; pp -> msum pp
   applySearch tag p = [apply tag p]

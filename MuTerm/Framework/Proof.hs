@@ -143,9 +143,10 @@ instance Monad m => Functor (ProofF info m) where
   fmap _ (Success pi p)  = Success pi p
   fmap _ (Refuted pi p)  = Refuted pi p
   fmap _ (DontKnow pi p) = DontKnow pi p
-  fmap f (Search mk)     = Search (liftM f mk)
+  fmap f (Or pi p mk)    = Or pi p (liftM f mk)
+  fmap f (Search mk)     = Search  (liftM f mk)
   fmap f (MAnd k1 k2)    = MAnd (f k1) (f k2)
-  fmap f MDone           = MDone
+  fmap _f MDone          = MDone
 
 instance (Monad m, Traversable m) => Foldable (ProofF info m) where foldMap = T.foldMapDefault
 
@@ -156,14 +157,16 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
   traverse _ (Refuted pi p)  = pure $ Refuted pi p
   traverse _ (DontKnow pi p) = pure $ DontKnow pi p
   traverse f (Search mk)     = Search <$> traverse f mk
+  traverse f (Or pi p mk)    = Or pi p <$> traverse f mk
   traverse f (MAnd k1 k2)    = MAnd <$> f k1 <*> f k2
-  traverse f MDone           = pure MDone
+  traverse _f MDone          = pure MDone
 
 
 -- MonadPlus
 
 instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
+    mplus (Impure(Search m1)) (Impure(Search m2)) = Impure $ Search $ mplus m1 m2
     mplus !p1 p2 = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show

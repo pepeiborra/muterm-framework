@@ -91,24 +91,11 @@ repeatSolver max f = go max where
   go n x = let x' = f x in (x' >>= go (n-1))
 
 -- | Try to apply a strategy and if it fails return the problem unmodified
-try :: ( Info (InfoConstraint processor) (Problem typ trs)
-       , Processor processor (Problem typ trs)
-       , Typ processor (Problem typ trs) ~ typ
-       , Trs processor (Problem typ trs) ~ trs
-       , MonadPlus mp, Traversable mp) =>
-       processor -> Problem typ trs -> Proof (InfoConstraint processor) mp (Problem typ trs)
-try n x = case apply n x of
+try n x = case n x of
             Impure DontKnow{} -> return x
             Impure (Search m) -> Impure (Search (m `mplus` (return.return) x))
             res               -> res
 
-lfp :: ( Eq (Problem typ trs)
-       , Info (InfoConstraint processor) (Problem typ trs)
-       , Processor processor (Problem typ trs)
-       , Typ processor (Problem typ trs) ~ typ
-       , Trs processor (Problem typ trs) ~ trs
-       , MonadPlus mp, Traversable mp) =>
-       processor -> Problem typ trs -> Proof (InfoConstraint processor) mp (Problem typ trs)
 lfp proc prob = do
   prob' <- try proc prob
   if prob == prob' then return prob' else lfp proc prob'

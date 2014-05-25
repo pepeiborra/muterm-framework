@@ -1,5 +1,5 @@
 name:		muterm-framework
-version: 	1.5.3
+version: 	1.6
 cabal-version:	>= 1.6
 description: 	A framework for building DP framework-based solvers
 license: 	AllRightsReserved

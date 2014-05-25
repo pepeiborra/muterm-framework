@@ -41,28 +41,25 @@ ProofF(..), Proof
 
 -- * Evaluation strategies
 , parAnds
-, sliceProof, unsafeSliceProof
+, sliceProof, unsafeSliceProof, simplifyProof
 ) where
 
 import Control.Applicative
 import Control.DeepSeq
 import Control.Parallel.Strategies
-import Control.Monad as M (MonadPlus(..), msum, guard, liftM, join, (>>=))
-import Control.Monad.Free (MonadFree(..), Free (..), foldFree, evalFree, mapFree)
-import Control.Applicative((<$>))
-import Data.Foldable (Foldable(..), toList)
-import Data.Monoid
+import Control.Monad as M (MonadPlus(..), liftM, join)
+import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree)
+import Data.Foldable (Foldable(..))
+import Data.Monoid ()
 import Data.Suitable
 import Data.TagBits
 import Data.Traversable as T (Traversable(..), foldMapDefault)
-import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
+import Data.Maybe (isNothing)
 import Text.PrettyPrint.HughesPJClass
-
-import MuTerm.Framework.Problem
 
 import qualified Data.Foldable as F
 
-import Prelude as P
+import Prelude as P hiding (pi)
 
 -----------------------------------------------------------------------------
 -- Proof Tree
@@ -93,6 +90,13 @@ instance NFData a => NFData (ProofF info m a) where
   rnf Search{} = ()
   rnf (MAnd p1 p2) = rnf p1 `seq` rnf p2 `seq` ()
   rnf MDone = ()
+
+problemInfo :: Proof info m t -> Maybe (SomeInfo info)
+problemInfo (Impure Search{}) = Nothing
+problemInfo (Impure MAnd{})   = Nothing
+problemInfo (Impure MDone{})  = Nothing
+problemInfo (Impure other)    = Just (problem other)
+problemInfo (Pure _)          = Nothing
 
 -- ------------------------------
 -- Parameterized super classes
@@ -167,6 +171,8 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
 instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
     mplus (Impure(Search m1)) (Impure(Search m2)) = Impure $ Search $ mplus m1 m2
+--    mplus (Impure DontKnow{}) p2 = p2
+--    mplus p1 (Impure DontKnow{}) = p1
     mplus !p1 p2 = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show
@@ -271,6 +277,39 @@ sliceProof = mapFree f where
 
     takeWhileAndOneMore _ []     = []
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
+
+-- Eliminate intermediate steps that do not improve the problem
+simplifyProof :: (Monad m, IsMZero m, Traversable m, Show (SomeInfo info)) =>
+                 Proof info m a -> Proof info m a
+simplifyProof = removeEmpty . removeIdem
+
+
+removeEmpty :: (IsMZero m, Traversable m) => Proof info m a -> Proof info m a
+removeEmpty = Impure . Search . foldFree (return . Pure) f where
+  f (Search k) =
+    let filtered = filterMP (not.isMZero) k in
+    case F.toList filtered of
+      []  -> mzero
+      [x] -> x
+      _   -> return $ Impure $ Search $ join $ filtered
+  f other = fmap Impure $ T.sequence other
+
+removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
+ where
+  f(And _ pi [subp]) parent
+    | Just (show pi) == fmap show parent = subp parent
+  f(And p pi pp) _parent = Impure $ And p pi (map ($ Just pi) pp)
+  f(Single p pi k) parent
+    | Just (show pi) == fmap show parent = k parent
+    | otherwise = Impure $ Single p pi (k $ Just pi)
+  -- Below cases are just the identity
+  f(Or p pi pp) _ = Impure $ Or p pi (liftM ($ Just pi) pp)
+  f MDone _ = Impure MDone
+  f(Search k) parent = Impure $ Search (liftM ($ parent) k)
+  f(DontKnow p pi) _ = Impure $ DontKnow p pi
+  f(Success p pi)  _ = Impure $ Success p pi
+  f(Refuted p pi)  _ = Impure $ Refuted p pi
+  f(MAnd p1 p2) parent = Impure $ MAnd (p1 parent) (p2 parent)
 
 -- | Slices a proof to keep only the evaluated branches.
 --   Uses the impure 'unsafeIsEvaluated' function from the tag-bits package to discern evaluated subtrees.

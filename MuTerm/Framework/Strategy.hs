@@ -93,7 +93,7 @@ repeatSolver max f = go max where
 -- | Try to apply a strategy and if it fails return the problem unmodified
 try n x = case n x of
             Impure DontKnow{} -> return x
-            Impure (Search m) -> Impure (Search (m `mplus` (return.return) x))
+            Impure (Search m) | isMZero m -> return x
             res               -> res
 
 lfp proc prob = do

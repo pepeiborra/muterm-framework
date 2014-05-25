@@ -29,7 +29,7 @@ module MuTerm.Framework.Proof (
 
 -- * Exported data
 
-ProofF(..), Proof
+ProofF(..), Proof, search
 
 , SomeInfo (..), someInfo, Info, PrettyF
 , IsMZero(..)
@@ -97,6 +97,12 @@ problemInfo (Impure MAnd{})   = Nothing
 problemInfo (Impure MDone{})  = Nothing
 problemInfo (Impure other)    = Just (problem other)
 problemInfo (Pure _)          = Nothing
+
+-- | Smart constructor for Search
+search :: Monad m => m (Proof info m a) -> ProofF info m (Proof info m a)
+search xx = Search (xx >>= flatten) where
+  flatten (Impure(Search yy)) = yy
+  flatten other = return other
 
 -- ------------------------------
 -- Parameterized super classes
@@ -170,10 +176,10 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
 
 instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
-    mplus (Impure(Search m1)) (Impure(Search m2)) = Impure $ Search $ mplus m1 m2
+    mplus (Impure(Search m1)) (Impure(Search m2)) = Impure $ search $ mplus m1 m2
 --    mplus (Impure DontKnow{}) p2 = p2
 --    mplus p1 (Impure DontKnow{}) = p1
-    mplus !p1 p2 = Impure (Search (mplus (return p1) (return p2)))
+    mplus !p1 p2 = Impure $ search (mplus (return p1) (return p2))
 
 -- Show
 -----------------------------------------------------------------------------
@@ -272,7 +278,7 @@ sliceProof = mapFree f where
     f (And p pi pp) = And p pi $ takeWhileAndOneMore isSuccess pp
     f (MAnd  p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
     f (Or  p pi pp) = Or  p pi $ takeWhileMP (not.isSuccess) pp
-    f (Search m)    = Search   $ takeWhileMP (not.isSuccess) m
+    f (Search m)    = search   $ takeWhileMP (not.isSuccess) m
     f x = x
 
     takeWhileAndOneMore _ []     = []
@@ -285,13 +291,13 @@ simplifyProof = removeEmpty . removeIdem
 
 
 removeEmpty :: (IsMZero m, Traversable m) => Proof info m a -> Proof info m a
-removeEmpty = Impure . Search . foldFree (return . Pure) f where
+removeEmpty = Impure . search . foldFree (return . Pure) f where
   f (Search k) =
     let filtered = filterMP (not.isMZero) k in
     case F.toList filtered of
       []  -> mzero
       [x] -> x
-      _   -> return $ Impure $ Search $ join $ filtered
+      _   -> return $ Impure $ search $ join $ filtered
   f other = fmap Impure $ T.sequence other
 
 removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
@@ -305,7 +311,7 @@ removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
   -- Below cases are just the identity
   f(Or p pi pp) _ = Impure $ Or p pi (liftM ($ Just pi) pp)
   f MDone _ = Impure MDone
-  f(Search k) parent = Impure $ Search (liftM ($ parent) k)
+  f(Search k) parent = Impure $ search (liftM ($ parent) k)
   f(DontKnow p pi) _ = Impure $ DontKnow p pi
   f(Success p pi)  _ = Impure $ Success p pi
   f(Refuted p pi)  _ = Impure $ Refuted p pi
@@ -321,7 +327,7 @@ unsafeSliceProof = evalFree Pure (Impure . f) where
                        then Search (return $ sliceProof p1)
                       else (MAnd (sliceProof p1) (sliceProof p2))
     f (Or  p pi pp) = Or  p pi $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) pp
-    f (Search m)    = Search   $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) m
+    f (Search m)    = search   $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) m
     f x = x
 
     takeWhileAndOneMore _ []     = []

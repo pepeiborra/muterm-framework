@@ -29,6 +29,8 @@ import Data.Traversable (Traversable)
 import MuTerm.Framework.Proof (Proof,Info)
 import MuTerm.Framework.Problem
 
+import Debug.Hoed.Observe
+
 -----------------------------------------------------------------------------
 -- Classes
 -----------------------------------------------------------------------------
@@ -44,6 +46,7 @@ class Processor tag inp where
   type Trs tag inp
   apply       :: ( MonadPlus mp
                  , Traversable mp
+                 , Observable1 mp
                  , Info (InfoConstraint tag) inp
                  , Info (InfoConstraint tag) (Res tag inp)
                  ) =>
@@ -51,6 +54,7 @@ class Processor tag inp where
 
   applySearch :: ( MonadPlus mp
                  , Traversable mp
+                 , Observable1 mp
                  , Info (InfoConstraint tag) inp
                  , Info (InfoConstraint tag) (Res tag inp)
                  ) =>

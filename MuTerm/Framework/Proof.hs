@@ -9,7 +9,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -60,6 +60,7 @@ import Text.PrettyPrint.HughesPJClass
 import qualified Data.Foldable as F
 
 import Prelude as P hiding (pi)
+import GHC.Generics(Generic)
 
 -----------------------------------------------------------------------------
 -- Proof Tree
@@ -76,6 +77,7 @@ data ProofF info (m :: * -> *) (k :: *) =
   | Search !(m k)
   | MAnd  k k
   | MDone
+  deriving Generic
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
 type Proof info m a = Free (ProofF info m) a

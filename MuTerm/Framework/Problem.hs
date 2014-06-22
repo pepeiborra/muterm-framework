@@ -19,9 +19,11 @@ module MuTerm.Framework.Problem (
 
 IsProblem(..), IsDPProblem(..),
 MkProblem(..), MkDPProblem(..),
-mkDerivedProblem, mkDerivedDPProblem
+mkDerivedProblem, mkDerivedDPProblem, mapFramework,
+mkDerivedDPProblemO, mapFrameworkO
 ) where
 
+import Debug.Hoed.Observe
 
 {-----------------------------------------------------------------------------
 -- Problems are modeled as a data family associated to the class
@@ -52,14 +54,27 @@ class IsProblem typ => MkProblem typ trs where
     mapR f p = setR (f (getR p)) p
 
 class (IsDPProblem typ, MkProblem typ trs) => MkDPProblem typ trs where
-    mkDPProblem    :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> Problem typ trs
+    mkDPProblem  :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> Problem typ trs
+    mkDPProblemO :: (rules ~ trs, pairs ~ trs) => Observer -> typ -> rules -> pairs -> Problem typ trs
     mapP     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
     setP     :: trs -> Problem typ trs -> Problem typ trs
     setP rr = mapP (const rr)
     mapP f p = setP (f (getP p)) p
+    mkDPProblem = mkDPProblemO nilObserver
+    mkDPProblemO _ = mkDPProblem
 
 mkDerivedProblem :: (IsProblem typ, MkProblem typ' trs) => typ' -> Problem typ trs -> Problem typ' trs
 mkDerivedProblem typ p = mkProblem typ (getR p)
 
 mkDerivedDPProblem :: (IsDPProblem typ, MkDPProblem typ' trs) => typ' -> Problem typ trs -> Problem typ' trs
 mkDerivedDPProblem typ p = mkDPProblem typ (getR p) (getP p)
+
+mkDerivedDPProblemO :: (IsDPProblem typ, MkDPProblem typ' trs
+                       ) => Observer -> typ' -> Problem typ trs -> Problem typ' trs
+mkDerivedDPProblemO o typ p = mkDPProblemO o typ (getR p) (getP p)
+
+mapFramework :: (IsDPProblem typ, MkDPProblem typ' trs) => (typ -> typ') -> Problem typ trs -> Problem typ' trs
+mapFramework f p = mkDerivedDPProblem (f $ getFramework p) p
+
+mapFrameworkO :: (IsDPProblem typ, MkDPProblem typ' trs) => Observer -> (typ -> typ') -> Problem typ trs -> Problem typ' trs
+mapFrameworkO o f p = mkDerivedDPProblemO o (f $ getFramework p) p

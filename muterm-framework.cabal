@@ -35,7 +35,8 @@ Library
                  prettyclass,
                  xhtml,
                  tag-bits,
-                 suitable
+                 suitable,
+                 Hoed
 
   if impl(ghc > 6.12)
      Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving

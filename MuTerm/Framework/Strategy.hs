@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Strategy
@@ -37,13 +38,13 @@ import Data.Traversable (Traversable, traverse)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Processor
 import MuTerm.Framework.Proof
-
+import GHC.Generics (Generic)
 -----------------------------------------------------------------------------
 -- Data
 -----------------------------------------------------------------------------
 
 -- | Final is just a type level tag to signal the end of a processor chain
-data Final = Final
+data Final = Final deriving (Generic, Show)
 
 -----------------------------------------------------------------------------
 -- Functions

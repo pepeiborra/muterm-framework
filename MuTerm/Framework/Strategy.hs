@@ -21,7 +21,7 @@ module MuTerm.Framework.Strategy (
    (.|.), (.||.), (.|||.),
    (.&.),
    final, Final,
-   try,
+   try, orElse,
    simultaneously, parallelize,
    fixSolver, repeatSolver,
    lfp
@@ -108,6 +108,9 @@ lfp strat prob = do
   if isFailedLayer proof then return prob else do
        prob' <- proof
        if prob == prob' then return prob else lfp strat prob'
+
+orElse p1 p2 x = let res = p1 x in if isFailedLayer res then p2 x else res
+
 
 -- | If we have branches in the strategy that arrive to different kind
 -- of problems, we have to close each branch with the same type

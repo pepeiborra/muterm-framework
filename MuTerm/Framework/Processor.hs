@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverlappingInstances, UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
 -----------------------------------------------------------------------------
@@ -19,7 +20,7 @@ module MuTerm.Framework.Processor (
 
 -- * Exported classes
 InfoConstraint,
-Processor(..),
+Processor(..), apply, applySearch,
 Res
 ) where
 
@@ -44,21 +45,25 @@ type Res tag inp = Problem (Typ tag inp) (Trs tag inp)
 class Processor tag inp where
   type Typ tag inp
   type Trs tag inp
-  apply       :: ( MonadPlus mp
+  applyO      :: ( MonadPlus mp
                  , Traversable mp
                  , Observable1 mp
                  , Info (InfoConstraint tag) inp
                  , Info (InfoConstraint tag) (Res tag inp)
                  ) =>
-                 tag -> inp ->  Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))
+                 Observer -> tag -> inp ->  Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))
 
-  applySearch :: ( MonadPlus mp
-                 , Traversable mp
-                 , Observable1 mp
-                 , Info (InfoConstraint tag) inp
-                 , Info (InfoConstraint tag) (Res tag inp)
-                 ) =>
-                 tag -> inp -> [Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))]
+  applySearchO :: ( MonadPlus mp
+                  , Traversable mp
+                  , Observable1 mp
+                  , Info (InfoConstraint tag) inp
+                  , Info (InfoConstraint tag) (Res tag inp)
+                  ) =>
+                  Observer -> tag -> inp -> [Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))]
 
-  apply       tag p = case applySearch tag p of [p'] -> p' ; pp -> msum pp
-  applySearch tag p = [apply tag p]
+
+  applyO       o tag p = case applySearchO o tag p of [p'] -> p' ; pp -> msum pp
+  applySearchO o tag p = [applyO o tag p]
+
+apply       p = applyO       nilObserver p
+applySearch p = applySearchO nilObserver p

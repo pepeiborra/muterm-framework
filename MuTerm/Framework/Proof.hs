@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
@@ -37,7 +38,7 @@ ProofF(..), Proof, search
 -- * Exported functions
 
 , success, singleP, andP, dontKnow, refuted, mand, mprod
-, isSuccess, runProof
+, isSuccess, runProof, runProofO
 
 -- * Evaluation strategies
 , parAnds
@@ -54,13 +55,17 @@ import Data.Monoid ()
 import Data.Suitable
 import Data.TagBits
 import Data.Traversable as T (Traversable(..), foldMapDefault)
+import Data.Typeable
 import Data.Maybe (isNothing)
 import Text.PrettyPrint.HughesPJClass
+import Prelude.Extras
 
 import qualified Data.Foldable as F
 
 import Prelude as P hiding (pi)
 import GHC.Generics(Generic)
+
+import Debug.Hoed.Observe
 
 -----------------------------------------------------------------------------
 -- Proof Tree
@@ -109,8 +114,7 @@ search xx = Search (xx >>= flatten) where
 -- ------------------------------
 -- Parameterized super classes
 -- ------------------------------
-class    (Applicative f, Suitable f a) => Info f a
-instance (Applicative f, Suitable f a) => Info f a
+type Info f a = (Applicative f, Suitable f a, Ord a, Ord1 f, Typeable a, Typeable f)
 
 -- | Pretty printing info witness
 newtype PrettyF a = PrettyF a deriving (Functor, Pretty)
@@ -132,10 +136,24 @@ instance Pretty p => Suitable PrettyF p where constraints = PrettyDict
 
 -- | 'SomeInfo' existentially wraps a value together with a dictionary for a set of constraints
 data SomeInfo f where
-    SomeInfo :: Suitable f p => f p -> SomeInfo f
+    SomeInfo :: (Typeable f, Typeable p, Suitable f p, Ord p) => f p -> SomeInfo f
+
+
+instance Eq1 info => Eq (SomeInfo info) where
+  SomeInfo a == SomeInfo b =
+    case gcast b of
+      Nothing -> False
+      Just b' ->  a ==# b'
+
+instance Ord1 info => Ord (SomeInfo info) where
+  compare (SomeInfo a) (SomeInfo b) =
+    case gcast b of
+      Nothing -> compare (typeOf a) (typeOf b)
+      Just b' -> compare1 a b'
 
 instance Pretty (SomeInfo PrettyF) where
    pPrint (SomeInfo p) = withConstraintsOf p $ \PrettyDict -> pPrint p
+
 
 -- Tuple instances
 
@@ -222,27 +240,26 @@ mprod = P.foldr mand (Impure MDone) where
 -- ---------
 
 -- | Pack the proof information
-someInfo :: (Info f p) => p -> SomeInfo f
+someInfo :: (Typeable p, Info f p) => p -> SomeInfo f
 someInfo = SomeInfo . pure
 
 -- | Pack the problem
-someProblem :: (Info f p) => p -> SomeInfo f
+someProblem :: (Typeable p, Info f p) => p -> SomeInfo f
 someProblem = SomeInfo . pure
 
 -- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
-evalSolF' Refuted{..}    = return (Impure Refuted{..})
-evalSolF' DontKnow{}     = mzero
-evalSolF' MDone          = return (Impure MDone)
-evalSolF' Success{..}    = return (Impure Success{..})
-evalSolF' (Search mk)    = join mk
-evalSolF' (And pi pb []) = return (Impure $ Success pi pb)
-evalSolF' (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
-evalSolF' (Or  pi pb ll) = (Impure . Single pi pb) `liftM` join ll
-evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
-                           return (Impure $ MAnd s1 s2)
-evalSolF' (Single pi pb p) = (Impure . Single pi pb) `liftM` p
-
+evalSolF' :: (MonadPlus mp) => Observer -> ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
+evalSolF' _ Refuted{..}    = return (Impure Refuted{..})
+evalSolF' _ DontKnow{}     = mzero
+evalSolF' _ MDone          = return (Impure MDone)
+evalSolF' _ Success{..}    = return (Impure Success{..})
+evalSolF' _ (Search mk)    = join mk
+evalSolF' _ (And pi pb []) = return (Impure $ Success pi pb)
+evalSolF' _ (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
+evalSolF' _ (Or  pi pb ll) = (Impure . Single pi pb) `liftM` join ll
+evalSolF' _ (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
+                             return (Impure $ MAnd s1 s2)
+evalSolF' _ (Single pi pb p) = (Impure . Single pi pb) `liftM` p
 
 class MonadPlus mp => IsMZero mp where isMZero :: mp a -> Bool
 instance IsMZero []    where isMZero = null
@@ -250,18 +267,23 @@ instance IsMZero Maybe where isMZero = isNothing
 
 -- | Evaluate if proof is success
 isSuccess :: IsMZero mp => Proof info mp a -> Bool
-isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
+isSuccess = not . isMZero . foldFree (const mzero) (evalSolF' nilObserver)
 
-data EmptyF a deriving (Functor, Foldable, Traversable)
+data EmptyF a deriving (Functor, Foldable, Traversable, Generic)
 
 instance Applicative EmptyF
 instance Monad EmptyF
 instance MonadPlus EmptyF
 instance IsMZero EmptyF where isMZero _ = True
+instance Observable1 EmptyF
 
 -- | Apply the evaluation returning the relevant proof subtree
-runProof :: MonadPlus mp => Proof info mp a -> mp (Proof info EmptyF ())
-runProof = foldFree (const mzero) evalSolF'
+runProof  :: (MonadPlus mp
+             ) => Proof info mp a -> mp (Proof info EmptyF ())
+runProof = foldFree (const mzero) (evalSolF' nilObserver)
+runProofO :: (Observable (SomeInfo info), Observable1 mp, MonadPlus mp
+             ) => Observer -> Proof info mp a -> mp (Proof info EmptyF ())
+runProofO (O o oo) = foldFree (const mzero) (oo "evalSolF" evalSolF')
 
 -- Evaluation Strategies
 -- Evaluate and branches in parallel
@@ -291,6 +313,11 @@ simplifyProof :: (Monad m, IsMZero m, Traversable m, Show (SomeInfo info)) =>
                  Proof info m a -> Proof info m a
 simplifyProof = removeEmpty . removeIdem
 
+
+deriving instance Generic (Free f v)
+instance Observable1 f => Observable1 (Free f) where
+  observer1 (Pure t)   = Pure . observer t
+  observer1 (Impure t) = Impure . observer t
 
 removeEmpty :: (IsMZero m, Traversable m) => Proof info m a -> Proof info m a
 removeEmpty = Impure . search . foldFree (return . Pure) f where

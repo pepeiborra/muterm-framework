@@ -1,5 +1,5 @@
 name:		muterm-framework
-version: 	1.6.1
+version: 	1.6.2
 cabal-version:	>= 1.6
 description: 	A framework for building DP framework-based solvers
 license: 	AllRightsReserved
@@ -31,15 +31,17 @@ Library
                  control-monad-free >= 0.4,
                  containers,
                  deepseq,
+                 mtl,
                  parallel > 2,
                  prettyclass,
                  xhtml,
                  tag-bits,
                  suitable,
-                 Hoed
+                 Hoed,
+                 prelude-extras
 
   if impl(ghc > 6.12)
-     Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving
+     Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving, ConstraintKinds
      cpp-options: -DGHC612
   else
      Extensions: TemplateHaskell

@@ -19,6 +19,7 @@ module MuTerm.Framework.Problem (
 
 IsProblem(..), IsDPProblem(..),
 MkProblem(..), MkDPProblem(..),
+setR, setP, mapR, mapP, mkDPProblem,
 mkDerivedProblem, mkDerivedDPProblem, mapFramework,
 mkDerivedDPProblemO, mapFrameworkO
 ) where
@@ -47,21 +48,25 @@ class IsProblem typ => IsDPProblem typ where
     getP     :: Problem typ trs -> trs
 
 class IsProblem typ => MkProblem typ trs where
-    mkProblem    :: (rules ~ trs) => typ -> rules -> Problem typ trs
-    mapR     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
-    setR     :: trs -> Problem typ trs -> Problem typ trs
-    setR rr = mapR (const rr)
-    mapR f p = setR (f (getR p)) p
+    mkProblem  :: (rules ~ trs) => typ -> rules -> Problem typ trs
+    mapRO      :: Observer -> (trs -> trs) -> Problem typ trs -> Problem typ trs
+    setRO      :: Observer -> trs -> Problem typ trs -> Problem typ trs
+    setRO o rr  = mapRO o (const rr)
+    mapRO o f p = setRO o (f $ getR p) p
+
+setR x = setRO nilObserver x
+mapR f = mapRO nilObserver f
 
 class (IsDPProblem typ, MkProblem typ trs) => MkDPProblem typ trs where
-    mkDPProblem  :: (rules ~ trs, pairs ~ trs) => typ -> rules -> pairs -> Problem typ trs
     mkDPProblemO :: (rules ~ trs, pairs ~ trs) => Observer -> typ -> rules -> pairs -> Problem typ trs
-    mapP     :: (trs -> trs) -> Problem typ trs -> Problem typ trs
-    setP     :: trs -> Problem typ trs -> Problem typ trs
-    setP rr = mapP (const rr)
-    mapP f p = setP (f (getP p)) p
-    mkDPProblem = mkDPProblemO nilObserver
-    mkDPProblemO _ = mkDPProblem
+    mapPO        :: Observer -> (trs -> trs) -> Problem typ trs -> Problem typ trs
+    setPO        :: Observer ->trs -> Problem typ trs -> Problem typ trs
+    setPO o rr    = mapPO o (const rr)
+    mapPO o f p   = setPO o (f (getP p)) p
+
+mkDPProblem typ = mkDPProblemO nilObserver typ
+setP x = setPO nilObserver x
+mapP f = mapPO nilObserver f
 
 mkDerivedProblem :: (IsProblem typ, MkProblem typ' trs) => typ' -> Problem typ trs -> Problem typ' trs
 mkDerivedProblem typ p = mkProblem typ (getR p)

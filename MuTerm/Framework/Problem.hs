@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Problem
@@ -24,6 +25,7 @@ mkDerivedProblem, mkDerivedDPProblem, mapFramework,
 mkDerivedDPProblemO, mapFrameworkO
 ) where
 
+import Data.Typeable
 import Debug.Hoed.Observe
 
 {-----------------------------------------------------------------------------
@@ -39,10 +41,12 @@ import Debug.Hoed.Observe
        - Keeps the 'problem type' and the tuple of components semantically connected.
 -----------------------------------------------------------------------------}
 
-class Functor (Problem typ) => IsProblem typ where
+class (Functor (Problem typ)) => IsProblem typ where
     data Problem typ :: * -> *
     getFramework :: Problem typ trs -> typ
     getR         :: Problem typ trs -> trs
+
+deriving instance Typeable Problem
 
 class IsProblem typ => IsDPProblem typ where
     getP     :: Problem typ trs -> trs

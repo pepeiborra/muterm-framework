@@ -109,6 +109,15 @@ lfp strat prob = do
        prob' <- proof
        if prob == prob' then return prob else lfp strat prob'
 
+-- | Take the largest fixpoint of a strategy, bounded.
+lfpBounded :: (IsMZero mp, Eq a) => Int -> (a -> Proof info mp a) -> a -> Proof info mp a
+lfpBounded 0 strat prob = return prob
+lfpBounded n strat prob = do
+  let proof = strat prob
+  if isFailedLayer proof then return prob else do
+       prob' <- proof
+       if prob == prob' then return prob else lfpBounded (n-1) strat prob'
+
 orElse p1 p2 x = let res = p1 x in if isFailedLayer res then p2 x else res
 
 

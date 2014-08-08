@@ -332,14 +332,14 @@ removeEmpty = Impure . search . foldFree (return . Pure) f where
 removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
  where
   f(And _ pi [subp]) parent
-    | Just (show pi) == fmap show parent = subp parent
+    | Just pi == parent = subp parent
   f(And p pi pp) _parent = Impure $ And p pi (map ($ Just pi) pp)
   f(Single p pi k) parent
-    | Just (show pi) == fmap show parent = k parent
+    | Just pi == parent = k parent
     | otherwise = Impure $ Single p pi (k $ Just pi)
-  -- Below cases are just the identity
-  f(Or p pi pp) _ = Impure $ Or p pi (liftM ($ Just pi) pp)
-  f MDone _ = Impure MDone
+
+  f(Or p pi pp) _    = Impure $ Or p pi (liftM ($ Just pi) pp)
+  f MDone _          = Impure MDone
   f(Search k) parent = Impure $ search (liftM ($ parent) k)
   f(DontKnow p pi) _ = Impure $ DontKnow p pi
   f(Success p pi)  _ = Impure $ Success p pi

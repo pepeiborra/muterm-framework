@@ -47,3 +47,4 @@ Library
      Extensions: TemplateHaskell
      build-depends: derive > 2
      cpp-options: -DDERIVE
+  ghc-prof-options: -fprof-auto

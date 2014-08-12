@@ -1,6 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
@@ -8,9 +10,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE KindSignatures, PolyKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric, DeriveDataTypeable #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -43,20 +45,26 @@ ProofF(..), Proof, search
 -- * Evaluation strategies
 , parAnds
 , sliceProof, unsafeSliceProof, simplifyProof
+, pruneProof, pruneProofO
+, pruneProofLazy, pruneProofLazyO
 ) where
 
 import Control.Applicative
 import Control.DeepSeq
 import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), liftM, join)
-import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree)
+import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree, mapFreeM)
+import Control.Monad.State.Strict (StateT, MonadState(..), evalState)
+import Control.Monad.Zip
 import Data.Foldable (Foldable(..))
+import Data.Maybe (fromMaybe)
 import Data.Monoid ()
 import Data.Suitable
 import Data.TagBits
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 import Data.Typeable
 import Data.Maybe (isNothing)
+import qualified Data.Set as Set
 import Text.PrettyPrint.HughesPJClass
 import Prelude.Extras
 
@@ -98,12 +106,22 @@ instance NFData a => NFData (ProofF info m a) where
   rnf (MAnd p1 p2) = rnf p1 `seq` rnf p2 `seq` ()
   rnf MDone = ()
 
-problemInfo :: Proof info m t -> Maybe (SomeInfo info)
-problemInfo (Impure Search{}) = Nothing
-problemInfo (Impure MAnd{})   = Nothing
-problemInfo (Impure MDone{})  = Nothing
-problemInfo (Impure other)    = Just (problem other)
-problemInfo (Pure _)          = Nothing
+instance (Observable1 m,  Observable(SomeInfo info)) => Observable1 (ProofF info m)
+
+problemInfoF :: ProofF info m t -> Maybe (SomeInfo info)
+problemInfoF (Search{}) = Nothing
+problemInfoF (MAnd{})   = Nothing
+problemInfoF (MDone{})  = Nothing
+problemInfoF (other)    = Just (problem other)
+
+problemInfo (Impure x)  = problemInfoF x
+problemInfo  Pure{}     = Nothing
+
+procInfoF :: ProofF info m t -> Maybe (SomeInfo info)
+procInfoF (Search{}) = Nothing
+procInfoF (MAnd{})   = Nothing
+procInfoF (MDone{})  = Nothing
+procInfoF (other)    = Just (procInfo other)
 
 -- | Smart constructor for Search
 search :: Monad m => m (Proof info m a) -> ProofF info m (Proof info m a)
@@ -238,6 +256,7 @@ mprod = P.foldr mand (Impure MDone) where
 -- ---------
 -- Functions
 -- ---------
+xx `at` k = fromMaybe (error "at") (lookup k xx)
 
 -- | Pack the proof information
 someInfo :: (Typeable p, Info f p) => p -> SomeInfo f
@@ -309,10 +328,77 @@ sliceProof = mapFree f where
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
 
 -- Eliminate intermediate steps that do not improve the problem
-simplifyProof :: (Monad m, IsMZero m, Traversable m, Show (SomeInfo info)) =>
+simplifyProof :: (Monad m, IsMZero m, Traversable m, Typeable info, Eq1 info) =>
                  Proof info m a -> Proof info m a
 simplifyProof = removeEmpty . removeIdem
 
+pruneProof :: ( MonadPlus m, Traversable m, Ord1 info
+              , Observable (SomeInfo info), Observable1 Set.Set, Observable a, Observable1 m
+              ) => Proof info m a -> Proof info m a
+pruneProof = pruneProofO nilObserver
+-- Eliminate duplicate subproofs
+pruneProofO :: ( MonadPlus m, Traversable m, Ord1 info
+               , Observable (SomeInfo info), Observable1 Set.Set, Observable a, Observable1 m
+               ) => Observer -> Proof info m a -> Proof info m a
+pruneProofO (O o oo) = (`evalState` Set.empty) . mapFreeM (oo "f" f) where
+  f (O o oo) x@Success{}  = return x
+  f (O o oo) x@DontKnow{} = return x
+  f (O o oo) x@Refuted{}  = return x
+  f (O o oo) x@And{}      = return x
+--  f (O o oo) x@Single{}   = return x -- this case shouldn't be here, but..
+  f (O o oo) x | Just pi <- problemInfoF x
+               , Just procI <- procInfoF x
+               = do
+    seen <- get
+    if o "member" Set.member (pi, procI) seen
+       then return $ Search mzero
+       else do
+         put (Set.insert (pi,procI) seen)
+         return x
+  f _ x = return x
+
+{- Circular version of pruneProof, as unfortunately the monadic one makes the tree strict and therefore is useless for our purposes.
+   Here we make use of circularity to compute a map from (problemInfo, procInfo) to a position in the tree,
+   that we then use to remove duplicates from the tree.
+   But instead of doing it in two passes, we do it in the same one, which means we don't have to force the entire tree.
+ -}
+
+
+pruneProofLazy :: ( Eq1 info, MonadZip m
+                  , Observable(SomeInfo info), Observable a, Observable1 m
+                  ) => (forall x. m x -> [x])
+                    -> Free (ProofF info m) a
+                    -> Free (ProofF info m) a
+pruneProofLazy x = pruneProofLazyO nilObserver x
+
+pruneProofLazyO :: ( Eq1 info, MonadZip m
+                   , Observable(SomeInfo info), Observable a, Observable1 m
+                   ) => Observer
+                     -> (forall x. m x -> [x])
+                     -> Free (ProofF info m) a
+                     -> Free (ProofF info m) a
+pruneProofLazyO (O o oo) run x =
+  let (seen, res) = foldFree (\v -> ([], Pure v)) (oo "f" f seen) x in res
+ where
+  f _ _    (Success  pi p)                       = ([], Impure(Success  pi p))
+  f _ _    (DontKnow pi p)                       = ([], Impure(DontKnow pi p))
+  f _ _    (Refuted  pi p)                       = ([], Impure(Refuted  pi p))
+
+  f _ seen (And      pi p (unzip -> (seens,xx))) = ( ((pi,p), Impure(And pi p xx)) : concat seens
+                                                   , seen `at` (pi,p))
+  f _ seen (Or       pi p (munzip -> (seens,xx))) = ( ((pi,p), Impure(Or pi p xx)) : concat(run seens)
+                                                   , seen `at` (pi,p))
+  f _ seen (Single   pi p (seens,it))             = ( ((pi,p), Impure(Single pi p it)) : seens
+                                                   , seen `at` (pi,p))
+  f _ _    (Search   (munzip -> (seens, xx)))     = ( concat(run seens), Impure(Search xx))
+  f _ _     MDone                                = ([], Impure MDone)
+  f _ _    (MAnd (seens1, x1) (seens2, x2))      = ( seens1 ++ seens2, Impure(MAnd x1 x2 ))
+
+
+instance Monad m => Observable1 (StateT s m) where
+  observer1 comp p = do
+    res <- comp
+    send "<State>" (return return << res) p
 
 deriving instance Generic (Free f v)
 instance Observable1 f => Observable1 (Free f) where

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -20,8 +21,9 @@ module MuTerm.Framework.Problem (
 
 IsProblem(..), IsDPProblem(..),
 MkProblem(..), MkDPProblem(..),
-setR, setP, mapR, mapP, mkDPProblem,
-mkDerivedProblem, mkDerivedDPProblem, mapFramework,
+setR, setP, mapR, mapP,
+setR_unchecked, setP_unchecked,
+mkDPProblem,mkDerivedProblem, mkDerivedDPProblem, mapFramework,
 mkDerivedDPProblemO, mapFrameworkO
 ) where
 
@@ -52,25 +54,33 @@ class IsProblem typ => IsDPProblem typ where
     getP     :: Problem typ trs -> trs
 
 class IsProblem typ => MkProblem typ trs where
-    mkProblem  :: (rules ~ trs) => typ -> rules -> Problem typ trs
-    mapRO      :: Observer -> (trs -> trs) -> Problem typ trs -> Problem typ trs
-    setRO      :: Observer -> trs -> Problem typ trs -> Problem typ trs
+    mkProblem       :: (rules ~ trs) => typ -> rules -> Problem typ trs
+    mkProblemO      :: (rules ~ trs) => Observer -> typ -> rules -> Problem typ trs
+    mapRO           :: Observer -> (trs -> trs) -> Problem typ trs -> Problem typ trs
+    setRO           :: Observer -> trs -> Problem typ trs -> Problem typ trs
+    setR_uncheckedO :: Observer -> trs -> Problem typ trs -> Problem typ trs
+    mkProblemO _ typ rr = mkProblem typ rr
+    mkProblem typ rr = mkProblemO nilObserver typ rr
     setRO o rr  = mapRO o (const rr)
     mapRO o f p = setRO o (f $ getR p) p
 
 setR x = setRO nilObserver x
+setR_unchecked x = setR_uncheckedO nilObserver x
 mapR f = mapRO nilObserver f
 
 class (IsDPProblem typ, MkProblem typ trs) => MkDPProblem typ trs where
-    mkDPProblemO :: (rules ~ trs, pairs ~ trs) => Observer -> typ -> rules -> pairs -> Problem typ trs
-    mapPO        :: Observer -> (trs -> trs) -> Problem typ trs -> Problem typ trs
-    setPO        :: Observer ->trs -> Problem typ trs -> Problem typ trs
+    mkDPProblemO    :: (rules ~ trs, pairs ~ trs) => Observer -> typ -> rules -> pairs -> Problem typ trs
+    mapPO           :: Observer -> (trs -> trs) -> Problem typ trs -> Problem typ trs
+    setPO           :: Observer ->trs -> Problem typ trs -> Problem typ trs
+    setP_uncheckedO :: Observer ->trs -> Problem typ trs -> Problem typ trs
     setPO o rr    = mapPO o (const rr)
     mapPO o f p   = setPO o (f (getP p)) p
 
 mkDPProblem typ = mkDPProblemO nilObserver typ
 setP x = setPO nilObserver x
+setP_unchecked x = setP_uncheckedO nilObserver x
 mapP f = mapPO nilObserver f
+
 
 mkDerivedProblem :: (IsProblem typ, MkProblem typ' trs) => typ' -> Problem typ trs -> Problem typ' trs
 mkDerivedProblem typ p = mkProblem typ (getR p)

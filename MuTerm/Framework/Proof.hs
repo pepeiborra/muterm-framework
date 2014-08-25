@@ -54,6 +54,7 @@ import Control.DeepSeq
 import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), liftM, join)
 import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree, mapFreeM)
+import Control.Monad.Free.Extras ()
 import Control.Monad.State.Strict (StateT, MonadState(..), evalState)
 import Control.Monad.Zip
 import Data.Foldable (Foldable(..))
@@ -74,6 +75,7 @@ import Prelude as P hiding (pi)
 import GHC.Generics(Generic)
 
 import Debug.Hoed.Observe
+import Debug.Hoed.Observe.Transformers
 
 -----------------------------------------------------------------------------
 -- Proof Tree
@@ -394,17 +396,6 @@ pruneProofLazyO (O o oo) run x =
   f _ _     MDone                                = ([], Impure MDone)
   f _ _    (MAnd (seens1, x1) (seens2, x2))      = ( seens1 ++ seens2, Impure(MAnd x1 x2 ))
 
-
-instance Monad m => Observable1 (StateT s m) where
-  observer1 comp p = do
-    res <- comp
-    send "<State>" (return return << res) p
-
-deriving instance Generic (Free f v)
-instance Observable1 f => Observable1 (Free f) where
-  observer1 (Pure t)   = Pure . observer t
-  observer1 (Impure t) = Impure . observer t
-
 removeEmpty :: (IsMZero m, Traversable m) => Proof info m a -> Proof info m a
 removeEmpty = Impure . search . foldFree (return . Pure) f where
   f (Search k) =
@@ -418,10 +409,10 @@ removeEmpty = Impure . search . foldFree (return . Pure) f where
 removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
  where
   f(And _ pi [subp]) parent
-    | Just pi == parent = subp parent
+    | Just pi == parent {-|| isNothing parent-} = subp parent
   f(And p pi pp) _parent = Impure $ And p pi (map ($ Just pi) pp)
   f(Single p pi k) parent
-    | Just pi == parent = k parent
+    | Just pi == parent {-|| isNothing parent-} = k parent
     | otherwise = Impure $ Single p pi (k $ Just pi)
 
   f(Or p pi pp) _    = Impure $ Or p pi (liftM ($ Just pi) pp)

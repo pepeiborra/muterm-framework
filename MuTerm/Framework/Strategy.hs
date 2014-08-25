@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric #-}
 -----------------------------------------------------------------------------
@@ -24,7 +25,7 @@ module MuTerm.Framework.Strategy (
    try, orElse,
    simultaneously, parallelize,
    fixSolver, repeatSolver,
-   lfp
+   lfp, lfpBounded
   ) where
 
 import MuTerm.Framework.Proof(Proof)
@@ -34,6 +35,7 @@ import Control.DeepSeq
 import Control.Monad ((>=>), mplus, MonadPlus)
 import Control.Monad.Free
 import Control.Parallel.Strategies
+import Data.Foldable (Foldable, toList)
 import Data.Traversable (Traversable, traverse)
 import MuTerm.Framework.Problem
 import MuTerm.Framework.Processor
@@ -110,14 +112,18 @@ lfp strat prob = do
        if prob == prob' then return prob else lfp strat prob'
 
 -- | Take the largest fixpoint of a strategy, bounded.
-lfpBounded :: (IsMZero mp, Eq a) => Int -> (a -> Proof info mp a) -> a -> Proof info mp a
+lfpBounded :: (IsMZero mp, Traversable mp, Eq a) => Int -> (a -> Proof info mp a) -> a -> Proof info mp a
 lfpBounded 0 strat prob = return prob
 lfpBounded n strat prob = do
   let proof = strat prob
-  if isFailedLayer proof then return prob else do
+  case proof of
+      (toList -> [prob']) | prob == prob' -> return prob
+      _ | isFailedLayer proof -> return prob
+      _ -> do
        prob' <- proof
        if prob == prob' then return prob else lfpBounded (n-1) strat prob'
 
+orElse :: IsMZero mp => (a -> Proof info mp b) -> (a -> Proof info mp b) -> a -> Proof info mp b
 orElse p1 p2 x = let res = p1 x in if isFailedLayer res then p2 x else res
 
 

@@ -103,11 +103,14 @@ isFailedLayer proof =
 try :: IsMZero mp => (a -> Proof info mp a) -> a -> Proof info mp a
 try strat x = let res = strat x in if isFailedLayer res then return x else res
 
--- | Take the largest fixpoint of a strategy
-lfp :: (IsMZero mp, Eq a) => (a -> Proof info mp a) -> a -> Proof info mp a
+-- | Take the largest fixpoint of a strategy.
+lfp :: (IsMZero mp, Traversable mp, Eq a) => (a -> Proof info mp a) -> a -> Proof info mp a
 lfp strat prob = do
   let proof = strat prob
-  if isFailedLayer proof then return prob else do
+  case proof of
+      (toList -> [prob']) | prob == prob' -> return prob
+      _ | isFailedLayer proof -> return prob
+      _ -> do
        prob' <- proof
        if prob == prob' then return prob else lfp strat prob'
 

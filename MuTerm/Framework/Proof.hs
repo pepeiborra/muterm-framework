@@ -40,7 +40,7 @@ ProofF(..), Proof, search
 -- * Exported functions
 
 , success, singleP, andP, dontKnow, refuted, mand, mprod
-, isSuccess, runProof, runProofO
+, isSuccess, runProof
 
 -- * Evaluation strategies
 , parAnds
@@ -75,7 +75,7 @@ import Prelude as P hiding (pi)
 import GHC.Generics(Generic)
 
 import Debug.Hoed.Observe
-import Debug.Hoed.Observe.Transformers
+import Debug.Hoed.Observe.Instances
 
 -----------------------------------------------------------------------------
 -- Proof Tree
@@ -92,7 +92,7 @@ data ProofF info (m :: * -> *) (k :: *) =
   | Search !(m k)
   | MAnd  k k
   | MDone
-  deriving Generic
+  deriving (Generic,Generic1)
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
 type Proof info m a = Free (ProofF info m) a
@@ -109,6 +109,9 @@ instance NFData a => NFData (ProofF info m a) where
   rnf MDone = ()
 
 instance (Observable1 m,  Observable(SomeInfo info)) => Observable1 (ProofF info m)
+instance (Observable1 m, Observable(SomeInfo info), Observable a) => Observable(ProofF info m a) where
+  observers = observers1
+  observer = observer1
 
 problemInfoF :: ProofF info m t -> Maybe (SomeInfo info)
 problemInfoF (Search{}) = Nothing
@@ -269,18 +272,18 @@ someProblem :: (Typeable p, Info f p) => p -> SomeInfo f
 someProblem = SomeInfo . pure
 
 -- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadPlus mp) => Observer -> ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
-evalSolF' _ Refuted{..}    = return (Impure Refuted{..})
-evalSolF' _ DontKnow{}     = mzero
-evalSolF' _ MDone          = return (Impure MDone)
-evalSolF' _ Success{..}    = return (Impure Success{..})
-evalSolF' _ (Search mk)    = join mk
-evalSolF' _ (And pi pb []) = return (Impure $ Success pi pb)
-evalSolF' _ (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
-evalSolF' _ (Or  pi pb ll) = (Impure . Single pi pb) `liftM` join ll
-evalSolF' _ (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
+evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
+evalSolF' Refuted{..}    = return (Impure Refuted{..})
+evalSolF' DontKnow{}     = mzero
+evalSolF' MDone          = return (Impure MDone)
+evalSolF' Success{..}    = return (Impure Success{..})
+evalSolF' (Search mk)    = join mk
+evalSolF' (And pi pb []) = return (Impure $ Success pi pb)
+evalSolF' (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
+evalSolF' (Or  pi pb ll) = (Impure . Single pi pb) `liftM` join ll
+evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
                              return (Impure $ MAnd s1 s2)
-evalSolF' _ (Single pi pb p) = (Impure . Single pi pb) `liftM` p
+evalSolF' (Single pi pb p) = (Impure . Single pi pb) `liftM` p
 
 class MonadPlus mp => IsMZero mp where isMZero :: mp a -> Bool
 instance IsMZero []    where isMZero = null
@@ -288,9 +291,9 @@ instance IsMZero Maybe where isMZero = isNothing
 
 -- | Evaluate if proof is success
 isSuccess :: IsMZero mp => Proof info mp a -> Bool
-isSuccess = not . isMZero . foldFree (const mzero) (evalSolF' nilObserver)
+isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
 
-data EmptyF a deriving (Functor, Foldable, Traversable, Generic)
+data EmptyF a deriving (Functor, Foldable, Traversable, Generic, Generic1)
 
 instance Applicative EmptyF
 instance Monad EmptyF
@@ -301,10 +304,7 @@ instance Observable1 EmptyF
 -- | Apply the evaluation returning the relevant proof subtree
 runProof  :: (MonadPlus mp
              ) => Proof info mp a -> mp (Proof info EmptyF ())
-runProof = foldFree (const mzero) (evalSolF' nilObserver)
-runProofO :: (Observable (SomeInfo info), Observable1 mp, MonadPlus mp
-             ) => Observer -> Proof info mp a -> mp (Proof info EmptyF ())
-runProofO (O o oo) = foldFree (const mzero) (oo "evalSolF" evalSolF')
+runProof = foldFree (const mzero) evalSolF'
 
 -- Evaluation Strategies
 -- Evaluate and branches in parallel

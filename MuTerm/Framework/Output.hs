@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ExistentialQuantification #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Output

@@ -34,7 +34,7 @@ import MuTerm.Framework.Problem
 
 -- | Each processor is an instance of the class 'Processor'. The
 -- output problem depends of the input problem
-class Processor info tag o d | tag o -> info d where
+class Processor info tag o d | tag info o -> info d where
   apply       :: (MonadPlus mp, Info info o, Info info d) => tag -> o -> Proof info mp d
   applySearch :: (MonadPlus mp, Info info o, Info info d) => tag -> o -> [Proof info mp d]
 

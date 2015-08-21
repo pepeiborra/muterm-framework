@@ -38,7 +38,7 @@ Library
                  xhtml,
                  tag-bits,
                  suitable,
-                 Hoed,
+                 hoed-mini,
                  hoed-extras,
                  prelude-extras
 

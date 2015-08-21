@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -217,6 +218,10 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
 
 -- MonadPlus
 
+instance MonadPlus m => Alternative(Free (ProofF info m)) where
+  empty = mzero
+  (<|>) = mplus
+
 instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
     mplus (Impure(Search m1)) (Impure(Search m2)) = Impure $ search $ mplus m1 m2
@@ -296,6 +301,7 @@ isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
 data EmptyF a deriving (Functor, Foldable, Traversable, Generic, Generic1)
 
 instance Applicative EmptyF
+instance Alternative EmptyF
 instance Monad EmptyF
 instance MonadPlus EmptyF
 instance IsMZero EmptyF where isMZero _ = True

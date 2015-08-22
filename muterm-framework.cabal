@@ -34,7 +34,7 @@ Library
                  deepseq,
                  mtl,
                  parallel > 2,
-                 prettyclass,
+                 pretty,
                  xhtml,
                  tag-bits,
                  suitable,

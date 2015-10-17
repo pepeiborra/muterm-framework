@@ -52,6 +52,7 @@ ProofF(..), Proof, search
 
 import Control.Applicative
 import Control.DeepSeq
+import Control.Exception (catch, SomeException)
 import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), liftM, join)
 import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree, mapFreeM)
@@ -145,6 +146,9 @@ newtype PrettyF a = PrettyF a deriving (Functor, Pretty)
 instance Applicative PrettyF where
   pure = PrettyF
   PrettyF f <*> PrettyF a = PrettyF (f a)
+
+instance Eq1 PrettyF where PrettyF x ==# PrettyF y = x == y
+instance Ord1 PrettyF where compare1 (PrettyF x) (PrettyF y) = compare x y
 
 data instance Constraints PrettyF a = Pretty a => PrettyDict
 instance Pretty p => Suitable PrettyF p where constraints = PrettyDict
@@ -433,19 +437,25 @@ removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
 --   Uses the impure 'unsafeIsEvaluated' function from the tag-bits package to discern evaluated subtrees.
 --   Regardless its name, 'unsafeSliceProof' is actually safe.
 unsafeSliceProof = evalFree Pure (Impure . f) where
-    f (And p pi pp) = let pp' = filterMP unsafeIsEvaluated pp in
-                      And p pi $ map unsafeSliceProof $ takeWhileAndOneMore isSuccess pp'
-    f (MAnd  p1 p2) = if not(isSuccess p1)
-                       then Search (return $ sliceProof p1)
-                      else (MAnd (sliceProof p1) (sliceProof p2))
-    f (Or  p pi pp) = Or  p pi $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) pp
-    f (Search m)    = search   $ fmap unsafeSliceProof $ takeWhileMP (unsafeIsEvaluated .&. not.isSuccess) m
+    f x | not (isEvaluated x) = Search mzero
+    f (And p pi pp) = And p pi $ map unsafeSliceProof pp
+    f (MAnd  p1 p2)
+      | isEvaluated p1 && not(isSuccess p1) = Search (return $ unsafeSliceProof p1)
+      | isEvaluated p1 = MAnd (unsafeSliceProof p1) (unsafeSliceProof p2)
+      | otherwise = Search mzero
+    f (Or  p pi pp) = Or  p pi $ fmap unsafeSliceProof $ takeWhileMP (isEvaluated .&. not.isSuccess) pp
+    f (Search m)    = search   $ fmap unsafeSliceProof $ takeWhileMP (isEvaluated .&. not.isSuccess) m
+    f x@(Single proof p p') =
+      Single proof p $ if isEvaluated p' then unsafeSliceProof p' else mzero
     f x = x
 
     takeWhileAndOneMore _ []     = []
     takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
     infixr 3 .&.
     f .&. g = \x -> f x && g x
+
+--    isEvaluated x = unsafeIsEvaluated x && catch (seq x ()) (\ (e::SomeException) -> False)
+    isEvaluated x = unsafeIsEvaluated x
 
 filterMP, takeWhileMP :: (Foldable m, MonadPlus m) => (a -> Bool) -> m a -> m a
 takeWhileMP p = F.foldr f mzero

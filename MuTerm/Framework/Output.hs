@@ -87,7 +87,8 @@ pprProofF MDone = text "Done"
 pprProofF (Search sub) = text "Trying something different"
 
 -- | Gives more information on the attempted failed branches
-pprProofFailures = foldFree (const Doc.empty) f . sliceProof where
+--   without forcing unevaluated parts of the proof.
+pprProofFailures = foldFree (const Doc.empty) f . unsafeSliceProof where
       f (Search sub) = vcat . intersperse (text "Trying something different") . toList $ sub
       f x = pprProofF x
 

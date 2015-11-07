@@ -20,16 +20,16 @@ module MuTerm.Framework.Processor (
 
 -- * Exported classes
 InfoConstraint,
-Processor(..), apply, applySearch,
+Processor(..), apply, applySearch, applyE,
 Res
 ) where
-
-import Control.Monad
+import Control.Exception
+import Control.Monad.Free
 import Data.Suitable
 import Data.Traversable (Traversable)
-import MuTerm.Framework.Proof (Proof,Info)
+import MuTerm.Framework.Proof (Proof,Info,search,aborted)
 import MuTerm.Framework.Problem
-
+import System.IO.Unsafe
 import Debug.Hoed.Observe
 
 -----------------------------------------------------------------------------
@@ -45,25 +45,22 @@ type Res tag inp = Problem (Typ tag inp) (Trs tag inp)
 class Processor tag inp where
   type Typ tag inp
   type Trs tag inp
-  applyO      :: ( MonadPlus mp
-                 , Traversable mp
-                 , Observable1 mp
-                 , Info (InfoConstraint tag) inp
+  applyO      :: ( Info (InfoConstraint tag) inp
                  , Info (InfoConstraint tag) (Res tag inp)
                  ) =>
-                 Observer -> tag -> inp ->  Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))
+                 Observer -> tag -> inp ->  Proof (InfoConstraint tag) (Problem (Typ tag inp) (Trs tag inp))
 
-  applySearchO :: ( MonadPlus mp
-                  , Traversable mp
-                  , Observable1 mp
-                  , Info (InfoConstraint tag) inp
+  applySearchO :: ( Info (InfoConstraint tag) inp
                   , Info (InfoConstraint tag) (Res tag inp)
                   ) =>
-                  Observer -> tag -> inp -> [Proof (InfoConstraint tag) mp (Problem (Typ tag inp) (Trs tag inp))]
+                  Observer -> tag -> inp -> [Proof (InfoConstraint tag) (Problem (Typ tag inp) (Trs tag inp))]
 
 
-  applyO       o tag p = case applySearchO o tag p of [p'] -> p' ; pp -> msum pp
+  applyO       o tag p = search( applySearchO o tag p)
   applySearchO o tag p = [applyO o tag p]
 
 apply       p = applyO       nilObserver p
 applySearch p = applySearchO nilObserver p
+
+applyE tag inp = unsafePerformIO $ do
+  evaluate(apply tag inp) `catch` \e -> return $ aborted (show (e :: SomeException))

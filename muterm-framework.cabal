@@ -40,7 +40,8 @@ Library
                  suitable,
                  hoed-mini,
                  hoed-extras,
-                 prelude-extras
+                 prelude-extras,
+                 logict
 
   if impl(ghc > 6.12)
      Extensions: DeriveFunctor, DeriveFoldable, DeriveTraversable, StandaloneDeriving, ConstraintKinds

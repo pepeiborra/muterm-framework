@@ -14,7 +14,9 @@
 {-# LANGUAGE KindSignatures, PolyKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveGeneric, DeriveDataTypeable #-}
-
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE LiberalTypeSynonyms #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Proof
@@ -36,16 +38,15 @@ module MuTerm.Framework.Proof (
 ProofF(..), Proof, search
 
 , SomeInfo (..), someInfo, Info, PrettyF
-, IsMZero(..)
 
 -- * Exported functions
 
-, success, singleP, andP, dontKnow, refuted, mand, mprod
+, success, aborted, singleP, andP, dontKnow, refuted, orElse, orElse1
 , isSuccess, runProof
 
 -- * Evaluation strategies
-, parAnds
-, sliceProof, unsafeSliceProof, simplifyProof
+, parallelize, simultaneously, theAnds, theOrs
+, unsafeSliceProof, simplifyProof
 , pruneProof, pruneProofO
 , pruneProofLazy, pruneProofLazyO
 ) where
@@ -54,9 +55,11 @@ import Control.Applicative
 import Control.DeepSeq
 import Control.Exception (catch, SomeException)
 import Control.Parallel.Strategies
-import Control.Monad as M (MonadPlus(..), liftM, join)
+import Control.Monad as M (MonadPlus(..), liftM, join,msum)
 import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree, mapFreeM)
 import Control.Monad.Free.Extras ()
+import Control.Monad.Fix (fix)
+import Control.Monad.Logic (MonadLogic(ifte))
 import Control.Monad.State.Strict (StateT, MonadState(..), evalState)
 import Control.Monad.Zip
 import Data.Foldable (Foldable(..))
@@ -84,55 +87,44 @@ import Debug.Hoed.Observe.Instances
 -----------------------------------------------------------------------------
 
 -- | Proof Tree constructors
-data ProofF info (m :: * -> *) (k :: *) =
+data ProofF info (k :: *) =
     And     {procInfo, problem :: !(SomeInfo info), subProblems::[k]}
-  | Or      {procInfo, problem :: !(SomeInfo info), alternatives::m k}
   | Single  {procInfo, problem :: !(SomeInfo info), subProblem::k}
   | Success {procInfo, problem :: !(SomeInfo info)}
   | Refuted {procInfo, problem :: !(SomeInfo info)}
   | DontKnow{procInfo, problem :: !(SomeInfo info)}
-  | Search !(m k)
-  | MAnd  k k
-  | MDone
-  deriving (Generic,Generic1)
+  | Search ![k]
+  | OrElse k k
+  | Aborted String
+  deriving (Generic,Generic1,Functor,Foldable,Traversable)
 
 -- | 'Proof' is a Free Monad. 'm' is the MonadPlus used for search
-type Proof info m a = Free (ProofF info m) a
+type Proof info a = Free (ProofF info) a
 
-instance NFData a => NFData (ProofF info m a) where
-  rnf (And _ _ pp) = rnf pp `seq` ()
-  rnf Or{} = ()
-  rnf (Single _ _ p) = rnf p `seq` ()
-  rnf Success{} = ()
-  rnf Refuted{} = ()
-  rnf DontKnow{} = ()
-  rnf Search{} = ()
-  rnf (MAnd p1 p2) = rnf p1 `seq` rnf p2 `seq` ()
-  rnf MDone = ()
+instance (NFData a) => NFData (ProofF info a) 
 
-instance (Observable1 m,  Observable(SomeInfo info)) => Observable1 (ProofF info m)
-instance (Observable1 m, Observable(SomeInfo info), Observable a) => Observable(ProofF info m a) where
+instance (Observable(SomeInfo info)) => Observable1 (ProofF info)
+instance (Observable(SomeInfo info), Observable a) => Observable(ProofF info a) where
   observers = observers1
   observer = observer1
 
-problemInfoF :: ProofF info m t -> Maybe (SomeInfo info)
-problemInfoF (Search{}) = Nothing
-problemInfoF (MAnd{})   = Nothing
-problemInfoF (MDone{})  = Nothing
-problemInfoF (other)    = Just (problem other)
+problemInfoF :: ProofF info t -> Maybe (SomeInfo info)
+problemInfoF Search{} = Nothing
+problemInfoF OrElse{} = Nothing
+problemInfoF (other)  = Just (problem other)
 
 problemInfo (Impure x)  = problemInfoF x
 problemInfo  Pure{}     = Nothing
 
-procInfoF :: ProofF info m t -> Maybe (SomeInfo info)
+procInfoF :: ProofF info t -> Maybe (SomeInfo info)
 procInfoF (Search{}) = Nothing
-procInfoF (MAnd{})   = Nothing
-procInfoF (MDone{})  = Nothing
+procInfoF OrElse{}   = Nothing
 procInfoF (other)    = Just (procInfo other)
 
 -- | Smart constructor for Search
-search :: Monad m => m (Proof info m a) -> ProofF info m (Proof info m a)
-search xx = Search (xx >>= flatten) where
+search :: [Proof info a] -> Proof info a
+search [x] = x
+search xx = Impure $ Search (xx >>= flatten) where
   flatten (Impure(Search yy)) = yy
   flatten other = return other
 
@@ -182,6 +174,7 @@ instance Ord1 info => Ord (SomeInfo info) where
 instance Pretty (SomeInfo PrettyF) where
    pPrint (SomeInfo p) = withConstraintsOf p $ \PrettyDict -> pPrint p
 
+instance NFData (SomeInfo f) where rnf (SomeInfo x) = seq x ()
 
 -- Tuple instances
 
@@ -195,43 +188,16 @@ instance Pretty (SomeInfo PrettyF) where
 -- Instances
 -----------------------------------------------------------------------------
 
-instance Monad m => Functor (ProofF info m) where
-  fmap f (And pi p kk)   = And pi p (fmap f kk)
-  fmap f (Single pi p k) = Single pi p (f k)
-  fmap _ (Success pi p)  = Success pi p
-  fmap _ (Refuted pi p)  = Refuted pi p
-  fmap _ (DontKnow pi p) = DontKnow pi p
-  fmap f (Or pi p mk)    = Or pi p (liftM f mk)
-  fmap f (Search mk)     = Search  (liftM f mk)
-  fmap f (MAnd k1 k2)    = MAnd (f k1) (f k2)
-  fmap _f MDone          = MDone
-
-instance (Monad m, Traversable m) => Foldable (ProofF info m) where foldMap = T.foldMapDefault
-
-instance (Monad m, Traversable m) => Traversable (ProofF info m) where
-  traverse f (And pi p kk)   = And pi p <$> traverse f kk
-  traverse f (Single pi p k) = Single pi p <$> f k
-  traverse _ (Success pi p)  = pure $ Success pi p
-  traverse _ (Refuted pi p)  = pure $ Refuted pi p
-  traverse _ (DontKnow pi p) = pure $ DontKnow pi p
-  traverse f (Search mk)     = Search <$> traverse f mk
-  traverse f (Or pi p mk)    = Or pi p <$> traverse f mk
-  traverse f (MAnd k1 k2)    = MAnd <$> f k1 <*> f k2
-  traverse _f MDone          = pure MDone
-
-
 -- MonadPlus
 
-instance MonadPlus m => Alternative(Free (ProofF info m)) where
+instance Alternative(Free (ProofF info)) where
   empty = mzero
   (<|>) = mplus
 
-instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
+instance MonadPlus (Free (ProofF info)) where
     mzero       = Impure (Search mzero)
-    mplus (Impure(Search m1)) (Impure(Search m2)) = Impure $ search $ mplus m1 m2
---    mplus (Impure DontKnow{}) p2 = p2
---    mplus p1 (Impure DontKnow{}) = p1
-    mplus !p1 p2 = Impure $ search (mplus (return p1) (return p2))
+    mplus (Impure(Search m1)) (Impure(Search m2)) = search $ mplus m1 m2
+    mplus !p1 p2 = search [p1,p2]
 
 -- Show
 -----------------------------------------------------------------------------
@@ -239,33 +205,34 @@ instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
 -----------------------------------------------------------------------------
 
 -- | Return a success node
-success :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
+success :: (Info info p, Info info problem) => p -> problem -> Proof info b
 success pi p0 = Impure (Success (someInfo pi) (someProblem p0))
 
 -- | Return a refuted node
-refuted :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
+refuted :: (Info info p, Info info problem) => p -> problem -> Proof info b
 refuted pi p0 = Impure (Refuted (someInfo pi) (someProblem p0))
 
 -- | Returns a don't know node
-dontKnow :: (Monad m, Info info p, Info info problem) => p -> problem -> Proof info m b
+dontKnow :: (Info info p, Info info problem) => p -> problem -> Proof info b
 dontKnow pi p0 = Impure (DontKnow (someInfo pi) (someProblem p0))
 
 -- | Return a new single node
-singleP :: (Monad m, Info info p, Info info problem) => p -> problem -> b -> Proof info m b
+singleP :: (Info info p, Info info problem) => p -> problem -> b -> Proof info b
 singleP pi p0 p = Impure (Single (someInfo pi) (someProblem p0) (return p))
 
 -- | Return a list of nodes
-andP :: (Monad m, Info info p, Info info problem) => p -> problem -> [b] -> Proof info m b
+andP :: (Info info p, Info info problem) => p -> problem -> [b] -> Proof info b
 andP pi p0 [] = success pi p0
 andP pi p0 pp = Impure (And (someInfo pi) (someProblem p0) (map return pp))
 
-mand :: Monad m => Proof info m a -> Proof info m a -> Proof info m a
-mand a b = Impure (MAnd a b)
+orElse a b = Impure (OrElse a b)
+orElse1 a b x = Impure (OrElse (a x) (b x))
 
-mprod :: Monad m => [Proof info m a] -> Proof info m a
-mprod = P.foldr mand (Impure MDone) where
-  mand a (Impure MDone) = a
-  mand a b = Impure (MAnd a b)
+aborted msg = Impure (Aborted msg)
+
+isAborted :: Proof info a -> Bool
+isAborted(Impure (Aborted _)) = True
+isAborted _ = False
 
 -- ---------
 -- Functions
@@ -281,77 +248,42 @@ someProblem :: (Typeable p, Info f p) => p -> SomeInfo f
 someProblem = SomeInfo . pure
 
 -- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadPlus mp) => ProofF info mp (mp(Proof info t ())) -> mp (Proof info t ())
+evalSolF' :: (MonadLogic mp) => ProofF info (mp(Proof info ())) -> mp (Proof info ())
 evalSolF' Refuted{..}    = return (Impure Refuted{..})
 evalSolF' DontKnow{}     = mzero
-evalSolF' MDone          = return (Impure MDone)
 evalSolF' Success{..}    = return (Impure Success{..})
-evalSolF' (Search mk)    = join mk
+evalSolF' (Search mk)    = msum mk
 evalSolF' (And pi pb []) = return (Impure $ Success pi pb)
 evalSolF' (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
-evalSolF' (Or  pi pb ll) = (Impure . Single pi pb) `liftM` join ll
-evalSolF' (MAnd  p1 p2)  = p1 >>= \s1 -> p2 >>= \s2 ->
-                             return (Impure $ MAnd s1 s2)
 evalSolF' (Single pi pb p) = (Impure . Single pi pb) `liftM` p
-
-class MonadPlus mp => IsMZero mp where isMZero :: mp a -> Bool
-instance IsMZero []    where isMZero = null
-instance IsMZero Maybe where isMZero = isNothing
+evalSolF' (OrElse a b)   = ifte a return b
+evalSolF' x@(Aborted msg) = mzero
 
 -- | Evaluate if proof is success
-isSuccess :: IsMZero mp => Proof info mp a -> Bool
-isSuccess = not . isMZero . foldFree (const mzero) evalSolF'
-
-data EmptyF a deriving (Functor, Foldable, Traversable, Generic, Generic1)
-
-instance Applicative EmptyF
-instance Alternative EmptyF
-instance Monad EmptyF
-instance MonadPlus EmptyF
-instance IsMZero EmptyF where isMZero _ = True
-instance Observable1 EmptyF
+isSuccess :: forall info a . Proof info a -> Bool
+isSuccess proof = case runProof proof of [] -> False ; _ -> True
 
 -- | Apply the evaluation returning the relevant proof subtree
-runProof  :: (MonadPlus mp
-             ) => Proof info mp a -> mp (Proof info EmptyF ())
+runProof  :: (MonadLogic mp
+             ) => Proof info a -> mp (Proof info ())
 runProof = foldFree (const mzero) evalSolF'
-
--- Evaluation Strategies
--- Evaluate and branches in parallel
-parAnds :: Strategy (Proof info m a)
-parAnds (Pure p) = return (Pure p)
-parAnds (Impure i) = liftM Impure (f i) where
-   f (And    pi p pp)= And    pi p <$> parList parAnds pp
-   f (Single pi p k) = Single pi p <$> parAnds k
-   f (MAnd p1 p2)    = MAnd <$> rpar (p1 `using` parAnds) <*> rpar (p2 `using` parAnds)
-   f it = return it
 
 -- | Approximately slices a proof to keep only the evaluated branches.
 --   Useful for things like displaying a failed proof.
-sliceProof,unsafeSliceProof :: (Functor mp, Foldable mp, IsMZero mp) => Proof info mp a -> Proof info mp a
-sliceProof = mapFree f where
-    f (And p pi pp) = And p pi $ takeWhileAndOneMore isSuccess pp
-    f (MAnd  p1 p2) = if not(isSuccess p1) then Search (return p1) else (MAnd p1 p2)
-    f (Or  p pi pp) = Or  p pi $ takeWhileMP (not.isSuccess) pp
-    f (Search m)    = search   $ takeWhileMP (not.isSuccess) m
-    f x = x
-
-    takeWhileAndOneMore _ []     = []
-    takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
+unsafeSliceProof :: Proof info a -> Proof info a
 
 -- Eliminate intermediate steps that do not improve the problem
-simplifyProof :: (Monad m, IsMZero m, Traversable m, Typeable info, Eq1 info) =>
-                 Proof info m a -> Proof info m a
-simplifyProof = removeEmpty . removeIdem
+simplifyProof :: (Typeable info, Eq1 info) =>
+                 Proof info a -> Proof info a
+simplifyProof = removeEmpty
 
-pruneProof :: ( MonadPlus m, Traversable m, Ord1 info
-              , Observable (SomeInfo info), Observable1 Set.Set, Observable a, Observable1 m
-              ) => Proof info m a -> Proof info m a
+pruneProof :: ( Ord1 info
+              , Observable (SomeInfo info), Observable1 Set.Set, Observable a) => Proof info a -> Proof info a
 pruneProof = pruneProofO nilObserver
 -- Eliminate duplicate subproofs
-pruneProofO :: ( MonadPlus m, Traversable m, Ord1 info
-               , Observable (SomeInfo info), Observable1 Set.Set, Observable a, Observable1 m
-               ) => Observer -> Proof info m a -> Proof info m a
+pruneProofO :: ( Ord1 info
+               , Observable (SomeInfo info), Observable1 Set.Set, Observable a
+               ) => Observer -> Proof info a -> Proof info a
 pruneProofO (O o oo) = (`evalState` Set.empty) . mapFreeM (oo "f" f) where
   f (O o oo) x@Success{}  = return x
   f (O o oo) x@DontKnow{} = return x
@@ -376,44 +308,45 @@ pruneProofO (O o oo) = (`evalState` Set.empty) . mapFreeM (oo "f" f) where
  -}
 
 
-pruneProofLazy :: ( Eq1 info, MonadZip m
-                  , Observable(SomeInfo info), Observable a, Observable1 m
-                  ) => (forall x. m x -> [x])
-                    -> Free (ProofF info m) a
-                    -> Free (ProofF info m) a
+pruneProofLazy :: ( Eq1 info
+                  , Observable(SomeInfo info), Observable a
+                  ) => Free (ProofF info) a
+                    -> Free (ProofF info) a
 pruneProofLazy x = pruneProofLazyO nilObserver x
 
-pruneProofLazyO :: ( Eq1 info, MonadZip m
-                   , Observable(SomeInfo info), Observable a, Observable1 m
+pruneProofLazyO :: ( Eq1 info
+                   , Observable(SomeInfo info), Observable a
                    ) => Observer
-                     -> (forall x. m x -> [x])
-                     -> Free (ProofF info m) a
-                     -> Free (ProofF info m) a
-pruneProofLazyO (O o oo) run x =
+                     -> Free (ProofF info) a
+                     -> Free (ProofF info) a
+pruneProofLazyO (O o oo) x =
   let (seen, res) = foldFree (\v -> ([], Pure v)) (oo "f" f seen) x in res
  where
-  f _ _    (Success  pi p)                       = ([], Impure(Success  pi p))
-  f _ _    (DontKnow pi p)                       = ([], Impure(DontKnow pi p))
-  f _ _    (Refuted  pi p)                       = ([], Impure(Refuted  pi p))
+  f _ _    (Success  pi p)                        = ([], Impure(Success  pi p))
+  f _ _    (DontKnow pi p)                        = ([], Impure(DontKnow pi p))
+  f _ _    (Refuted  pi p)                        = ([], Impure(Refuted  pi p))
 
-  f _ seen (And      pi p (unzip -> (seens,xx))) = ( ((pi,p), Impure(And pi p xx)) : concat seens
-                                                   , seen `at` (pi,p))
-  f _ seen (Or       pi p (munzip -> (seens,xx))) = ( ((pi,p), Impure(Or pi p xx)) : concat(run seens)
-                                                   , seen `at` (pi,p))
+  f _ seen (And      pi p (unzip -> (seens,xx)))  = ( ((pi,p), Impure(And pi p xx)) : concat seens
+                                                    , seen `at` (pi,p))
   f _ seen (Single   pi p (seens,it))             = ( ((pi,p), Impure(Single pi p it)) : seens
-                                                   , seen `at` (pi,p))
-  f _ _    (Search   (munzip -> (seens, xx)))     = ( concat(run seens), Impure(Search xx))
-  f _ _     MDone                                = ([], Impure MDone)
-  f _ _    (MAnd (seens1, x1) (seens2, x2))      = ( seens1 ++ seens2, Impure(MAnd x1 x2 ))
+                                                    , seen `at` (pi,p))
+  f _ _    (Search   (munzip -> (seens, xx)))     = ( concat(seens), Impure(Search xx))
+  f _ _    (OrElse (seens1, x1) (seens2, x2))     = ( seens1 ++ seens2, Impure(OrElse x1 x2 ))
 
-removeEmpty :: (IsMZero m, Traversable m) => Proof info m a -> Proof info m a
-removeEmpty = Impure . search . foldFree (return . Pure) f where
+  xx `at` k = fromMaybe (error "at") (lookup k xx)
+
+removeEmpty :: Proof info a -> Proof info a
+removeEmpty =  search . foldFree (return . Pure) f where
   f (Search k) =
-    let filtered = filterMP (not.isMZero) k in
+    let filtered = filter (not.null) k in
     case F.toList filtered of
       []  -> mzero
       [x] -> x
-      _   -> return $ Impure $ search $ join $ filtered
+      _   -> return $ search $ join $ filtered
+  f (OrElse a b)
+    | null a = b
+    | null b = a
+    | otherwise = orElse <$> a <*> b
   f other = fmap Impure $ T.sequence other
 
 removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
@@ -424,42 +357,62 @@ removeIdem x = foldFree (\v _ -> Pure v) f x (problemInfo x)
   f(Single p pi k) parent
     | Just pi == parent {-|| isNothing parent-} = k parent
     | otherwise = Impure $ Single p pi (k $ Just pi)
-
-  f(Or p pi pp) _    = Impure $ Or p pi (liftM ($ Just pi) pp)
-  f MDone _          = Impure MDone
-  f(Search k) parent = Impure $ search (liftM ($ parent) k)
+  f(Search k) parent = search (liftM ($ parent) k)
   f(DontKnow p pi) _ = Impure $ DontKnow p pi
   f(Success p pi)  _ = Impure $ Success p pi
   f(Refuted p pi)  _ = Impure $ Refuted p pi
-  f(MAnd p1 p2) parent = Impure $ MAnd (p1 parent) (p2 parent)
-
+  f(OrElse p1 p2) pa = Impure $ OrElse (p1 pa) (p2 pa)
+  f(Aborted msg)   _ = Impure $ Aborted msg
+  
 -- | Slices a proof to keep only the evaluated branches.
 --   Uses the impure 'unsafeIsEvaluated' function from the tag-bits package to discern evaluated subtrees.
 --   Regardless its name, 'unsafeSliceProof' is actually safe.
-unsafeSliceProof = evalFree Pure (Impure . f) where
-    f x | not (isEvaluated x) = Search mzero
+unsafeSliceProof x
+  | not (unsafeIsEvaluated x) = aborted "..."
+  | Pure _ <- x = x
+  | Impure y <- x = Impure (f y)
+  where
+    f x | not (unsafeIsEvaluated x) = Search mzero
     f (And p pi pp) = And p pi $ map unsafeSliceProof pp
-    f (MAnd  p1 p2)
-      | isEvaluated p1 && not(isSuccess p1) = Search (return $ unsafeSliceProof p1)
-      | isEvaluated p1 = MAnd (unsafeSliceProof p1) (unsafeSliceProof p2)
-      | otherwise = Search mzero
-    f (Or  p pi pp) = Or  p pi $ fmap unsafeSliceProof $ takeWhileMP (isEvaluated .&. not.isSuccess) pp
-    f (Search m)    = search   $ fmap unsafeSliceProof $ takeWhileMP (isEvaluated .&. not.isSuccess) m
-    f x@(Single proof p p') =
-      Single proof p $ if isEvaluated p' then unsafeSliceProof p' else mzero
+    f (Search m)    = Search   $ fmap unsafeSliceProof m
+    f (Single proof p p') = Single proof p $ unsafeSliceProof p'
+    f (OrElse p1 p2) = OrElse (unsafeSliceProof p1) (unsafeSliceProof p2)
     f x = x
 
-    takeWhileAndOneMore _ []     = []
-    takeWhileAndOneMore f (x:xs) = if f x then x : takeWhileAndOneMore f xs else [x]
-    infixr 3 .&.
-    f .&. g = \x -> f x && g x
+    isEvaluated = unsafeIsEvaluated
 
---    isEvaluated x = unsafeIsEvaluated x && catch (seq x ()) (\ (e::SomeException) -> False)
-    isEvaluated x = unsafeIsEvaluated x
+-- * Parallel Evaluation
+parallelize :: Strategy(Proof info a)
+parallelize = simultaneously ( theOrs . theAnds )
 
-filterMP, takeWhileMP :: (Foldable m, MonadPlus m) => (a -> Bool) -> m a -> m a
-takeWhileMP p = F.foldr f mzero
-  where
-    f x acc  = if p x then return x `mplus` acc else mzero
+simultaneously :: Functorial(ProofStrategyPart info a) -> Strategy(Proof info a)
+simultaneously s = foldFree (return.return) (fix ( s . seqF )) 
 
-filterMP p = F.foldr f mzero where f x acc = if p x then return x `mplus` acc else acc
+type Functorial a = a -> a
+type ProofStrategyPart info a = ProofF info (Eval (Proof info a)) -> Eval (Proof info a)
+
+theAnds, theOrs, seqF:: Functorial (ProofStrategyPart info a)
+
+theAnds k (And pi pb pp) = Impure . And pi pb    <$> parList   rseq (map runEval pp)
+theAnds k other = k other
+
+theOrs  k (Search m)     = Impure . Search         <$> parTraversable rseq (runEval <$> m)
+theOrs  k (OrElse a b)   = Impure . uncurry OrElse <$> parTuple2 rseq rseq (runEval a, runEval b)
+theOrs  k other          = k other
+
+seqF k (Search m) = do
+  search' <- return $! Search $ runEval <$> m
+  return (Impure search')
+seqF k (OrElse a b) = return $ Impure $ OrElse (runEval a) (runEval b)
+seqF k (And pi pb pp) = do
+  s' <- return $! And pi pb $ fmap runEval pp
+  return (Impure s')
+seqF k (Single pi pb p) = Impure . Single pi pb <$> p
+seqF k other = do
+  -- Avoid sequence as it would introduce too much strictness
+  -- forcing all the contents before wrapping in the Impure
+  x <- return $! fmap runEval other
+  return (Impure x)
+
+-- parOrF  s (Or pi pb pp)  = Or pi pb <$> parList s pp
+    

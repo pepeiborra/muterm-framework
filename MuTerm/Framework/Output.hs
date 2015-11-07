@@ -44,8 +44,8 @@ instance Pretty Doc where pPrint = id
 -- Text
 -- ----
 
-instance (Pretty a) => Pretty (ProofF PrettyF mp a) where pPrint = pprProofF
-instance (Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info mp a) where pPrint = pprProofF
+instance (Pretty a) => Pretty (ProofF PrettyF a) where pPrint = pprProofF
+instance (Pretty a, Pretty (SomeInfo info)) => Pretty (ProofF info a) where pPrint = pprProofF
 
 pprProofF Success{..} =
         pPrint problem $$
@@ -59,13 +59,6 @@ pprProofF DontKnow{..} =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo  $$
         text ("RESULT: Don't know.")
-{-
-pprProofF (Or proc prob sub) =
-        pPrint prob $$
-        text "PROCESSOR: " <> pPrint proc $$
-        text ("Problem was translated to " ++ show (length sub) ++ " equivalent problems.") $$
-        nest 8 (vcat $ punctuate (text "\n") $ map pPrint sub)
--}
 pprProofF (And proc prob sub)
        | length sub > 1 =
         pPrint prob $$
@@ -80,16 +73,14 @@ pprProofF (Single{..}) =
         pPrint problem $$
         text "PROCESSOR: " <> pPrint procInfo $$
         nest 4 (pPrint subProblem)
-pprProofF (MAnd p1 p2) =
-        text ("Problem was divided in 2 subproblems.") $$
-        nest 4 (pPrint p1 $$ pPrint p2)
-pprProofF MDone = text "Done"
 pprProofF (Search sub) = text "Trying something different"
+pprProofF (Aborted msg) = text "Aborted: " <> text msg
 
 -- | Gives more information on the attempted failed branches
 --   without forcing unevaluated parts of the proof.
-pprProofFailures = foldFree (const Doc.empty) f . unsafeSliceProof where
+pprProofFailures = foldFree (const Doc.empty) f where
       f (Search sub) = vcat . intersperse (text "Trying something different") . toList $ sub
+      f (OrElse a b) = text "OR" $$ nest 1 (a $$ b)
       f x = pprProofF x
 
 --------------
@@ -117,10 +108,10 @@ instance HTML (SomeInfo HTMLInfo) where
 instance HTML Doc where toHtml = toHtml . show
 
 
-instance (Pretty a, Ord a, Monad m) => HTML (Proof HTMLInfo m a) where
+instance (Pretty a, Ord a) => HTML (Proof HTMLInfo a) where
   toHtml = toHtmlProof
 
-instance (Pretty a, Ord a, Monad m, HTML (SomeInfo info)) => HTML (Proof info m a) where
+instance (Pretty a, Ord a, HTML (SomeInfo info)) => HTML (Proof info a) where
   toHtml = toHtmlProof
 
 toHtmlProof = foldFree (\prob -> p<<(pPrint prob $$ text "RESULT: not solved yet")) work where
@@ -136,24 +127,12 @@ toHtmlProof = foldFree (\prob -> p<<(pPrint prob $$ text "RESULT: not solved yet
         << problem  +++ br +++
            procInfo +++ br +++
            divmaybe
-{-
-    work Or{..} =
-        p
-        << problem +++ br +++
-           procInfo +++ br +++
-           "Problem was translated to " +++ show(length alternatives) +++ " equivalent alternatives" +++ br +++
-           unordList alternatives
--}
     work (And proc prob sub) =
         p
         << prob +++ br +++
            proc +++ br +++
 --           "Problem was divided in " +++ show(length sub) +++ " subproblems" +++ br +++
            unordList sub
-    work (MAnd p1 p2) =
-        p
-        << unordList [p1,p2]
-    work MDone = noHtml -- toHtml "RESULT: D"
     work Single{..} = p
                     << problem +++ br +++ procInfo +++ br +++ subProblem
 

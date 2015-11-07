@@ -2,6 +2,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Strategy
@@ -24,8 +25,8 @@ module MuTerm.Framework.Strategy (
    final, Final,
    try, orElse,
    simultaneously, parallelize,
-   fixSolver, repeatSolver,
-   lfp, lfpBounded
+   foreverTry, repeatSolver,
+   fix, fixBounded
   ) where
 
 import MuTerm.Framework.Proof(Proof)
@@ -65,69 +66,41 @@ data Final = Final deriving (Generic, Show)
                parPair rwhnf rwhnf)
 
 -- | deep parallel Or strategy combinator
-(.|||.) :: (NFData (Proof info m a), MonadPlus m) => (t -> Proof info m a) -> (t -> Proof info m a) -> t -> Proof info m a
+(.|||.) :: (NFData (Proof info a)) => (t -> Proof info a) -> (t -> Proof info a) -> t -> Proof info a
 (f .|||. g) m = uncurry mplus ((f m, g m)
                   `using`
                parPair rdeepseq rdeepseq)
 
 -- | And strategy combinator
-(.&.) :: Monad mp => (a -> Proof info mp b) -> (b -> Proof info mp c) -> a -> Proof info mp c
+(.&.) :: (a -> Proof info b) -> (b -> Proof info c) -> a -> Proof info c
 (.&.) = (>=>)
 
 infixr 5 .|., .||., .|||.
 infixr 5 .&.
 
-parallelize :: (a -> Proof info mp a) -> a -> Proof info mp a
-parallelize = (simultaneously .)
-
-simultaneously :: Proof info mp a -> Proof info mp a
-simultaneously = withStrategy parAnds
-
--- | Apply a strategy until a fixpoint is reached
-fixSolver :: Monad mp => (a -> Proof info mp a) -> a -> Proof info mp a
-fixSolver f x = let x' = f x in (x' >>= fixSolver f)
+-- | Apply a strategy until it fails
+foreverTry :: (a -> Proof info a) -> a -> Proof info a
+foreverTry f x = f x >>= try (foreverTry f)
 
 -- | Apply a strategy a bounded number of times
-repeatSolver :: Monad mp => Int -> (a -> Proof info mp a) -> a -> Proof info mp a
+repeatSolver ::Int -> (a -> Proof info a) -> a -> Proof info a
 repeatSolver max f = go max where
   go 0 x = return x
   go n x = let x' = f x in (x' >>= go (n-1))
 
-isFailedLayer proof =
-  case proof of
-            Impure DontKnow{} -> True
-            Impure (Search m) -> isMZero m
-            _ -> False
+try strat p = strat p `orElse` return p
 
--- | Try to apply a strategy and if it fails return the problem unmodified
-try :: IsMZero mp => (a -> Proof info mp a) -> a -> Proof info mp a
-try strat x = let res = strat x in if isFailedLayer res then return x else res
+-- | Take the fixpoint of a strategy (bounded).
+fixBounded :: (Eq a) => Int -> (a -> Proof info a) -> a -> Proof info a
+fixBounded n strat = try (go n) where
+  go  0 prob = return prob
+  go !n prob = do
+       prob' <- strat prob
+       if prob == prob' then return prob else go (n-1) prob'
 
--- | Take the largest fixpoint of a strategy.
-lfp :: (IsMZero mp, Traversable mp, Eq a) => (a -> Proof info mp a) -> a -> Proof info mp a
-lfp strat prob = do
-  let proof = strat prob
-  case proof of
-      (toList -> [prob']) | prob == prob' -> return prob
-      _ | isFailedLayer proof -> return prob
-      _ -> do
-       prob' <- proof
-       if prob == prob' then return prob else lfp strat prob'
-
--- | Take the largest fixpoint of a strategy, bounded.
-lfpBounded :: (IsMZero mp, Traversable mp, Eq a) => Int -> (a -> Proof info mp a) -> a -> Proof info mp a
-lfpBounded 0 strat prob = return prob
-lfpBounded n strat prob = do
-  let proof = strat prob
-  case proof of
-      (toList -> [prob']) | prob == prob' -> return prob
-      _ | isFailedLayer proof -> return prob
-      _ -> do
-       prob' <- proof
-       if prob == prob' then return prob else lfpBounded (n-1) strat prob'
-
-orElse :: IsMZero mp => (a -> Proof info mp b) -> (a -> Proof info mp b) -> a -> Proof info mp b
-orElse p1 p2 x = let res = p1 x in if isFailedLayer res then p2 x else res
+-- | Take the fixpoint of a strategy
+fix :: (Eq a) => (a -> Proof info a) -> a -> Proof info a
+fix x = fixBounded (-1) x
 
 
 -- | If we have branches in the strategy that arrive to different kind

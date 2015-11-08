@@ -17,6 +17,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE LiberalTypeSynonyms #-}
+{-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  MuTerm.Framework.Proof
@@ -55,13 +56,12 @@ import Control.Applicative
 import Control.DeepSeq
 import Control.Exception (catch, SomeException)
 import Control.Parallel.Strategies
-import Control.Monad as M (MonadPlus(..), liftM, join,msum)
+import Control.Monad as M (MonadPlus(..), liftM, join,msum,guard)
 import Control.Monad.Free (Free (..), foldFree, evalFree, mapFree, mapFreeM)
 import Control.Monad.Free.Extras ()
 import Control.Monad.Fix (fix)
 import Control.Monad.Logic (MonadLogic(ifte))
 import Control.Monad.State.Strict (StateT, MonadState(..), evalState)
-import Control.Monad.Zip
 import Data.Foldable (Foldable(..))
 import Data.Maybe (fromMaybe)
 import Data.Monoid ()
@@ -247,26 +247,38 @@ someInfo = SomeInfo . pure
 someProblem :: (Typeable p, Info f p) => p -> SomeInfo f
 someProblem = SomeInfo . pure
 
--- | Obtain the solution, collecting the proof path in the way
-evalSolF' :: (MonadLogic mp) => ProofF info (mp(Proof info ())) -> mp (Proof info ())
-evalSolF' Refuted{..}    = return (Impure Refuted{..})
-evalSolF' DontKnow{}     = mzero
-evalSolF' Success{..}    = return (Impure Success{..})
-evalSolF' (Search mk)    = msum mk
-evalSolF' (And pi pb []) = return (Impure $ Success pi pb)
-evalSolF' (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
-evalSolF' (Single pi pb p) = (Impure . Single pi pb) `liftM` p
-evalSolF' (OrElse a b)   = ifte a return b
-evalSolF' x@(Aborted msg) = mzero
+-- | Expand all the choices, returning the universe of proofs
+expandOrs :: (MonadLogic mp) => ProofF info (mp(Proof info ())) -> mp (Proof info ())
+expandOrs Refuted{..}    = return (Impure Refuted{..})
+expandOrs DontKnow{..}   = return (Impure DontKnow{..})
+expandOrs Success{..}    = return (Impure Success{..})
+expandOrs (Search mk)    = msum mk
+expandOrs (And pi pb []) = return (Impure $ Success pi pb)
+expandOrs (And pi pb ll) = (Impure . And pi pb) `liftM` P.sequence ll
+expandOrs (Single pi pb p) = (Impure . Single pi pb) `liftM` p
+expandOrs (OrElse a b)   = ifte a (\x -> if isSuccess x then return x else b) b
+expandOrs x@(Aborted msg) = return (aborted msg)
 
--- | Evaluate if proof is success
+-- | Evaluate if a proof is success
 isSuccess :: forall info a . Proof info a -> Bool
-isSuccess proof = case runProof proof of [] -> False ; _ -> True
+isSuccess = foldFree (const False) $
+            \case
+              Refuted{}  -> True
+              DontKnow{} -> False
+              Success{}  -> True
+              Search  pp -> or pp
+              And _ _ pp -> and pp
+              Single _ _ p -> p
+              OrElse a b -> a || b
+              Aborted _  -> False
 
--- | Apply the evaluation returning the relevant proof subtree
+-- | Depth-First Search for a successful proof tree
 runProof  :: (MonadLogic mp
              ) => Proof info a -> mp (Proof info ())
-runProof = foldFree (const mzero) evalSolF'
+runProof p = do
+  cand <- foldFree (const mzero) expandOrs p
+  guard (isSuccess cand)
+  return cand
 
 -- | Approximately slices a proof to keep only the evaluated branches.
 --   Useful for things like displaying a failed proof.
@@ -330,7 +342,7 @@ pruneProofLazyO (O o oo) x =
                                                     , seen `at` (pi,p))
   f _ seen (Single   pi p (seens,it))             = ( ((pi,p), Impure(Single pi p it)) : seens
                                                     , seen `at` (pi,p))
-  f _ _    (Search   (munzip -> (seens, xx)))     = ( concat(seens), Impure(Search xx))
+  f _ _    (Search   (unzip -> (seens, xx)))     = ( concat(seens), Impure(Search xx))
   f _ _    (OrElse (seens1, x1) (seens2, x2))     = ( seens1 ++ seens2, Impure(OrElse x1 x2 ))
 
   xx `at` k = fromMaybe (error "at") (lookup k xx)

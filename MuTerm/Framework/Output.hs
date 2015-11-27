@@ -3,7 +3,7 @@
 {-# LANGUAGE PatternGuards, ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverlappingInstances, UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}

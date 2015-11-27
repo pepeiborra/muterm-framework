@@ -47,7 +47,7 @@ import Control.DeepSeq
 import Control.Parallel.Strategies
 import Control.Monad as M (MonadPlus(..), msum, guard, liftM, join, (>>=))
 import Control.Monad.Free (MonadFree(..), Free (..), foldFree)
-import Control.Applicative((<$>))
+import Control.Applicative((<$>),Alternative(..))
 import Data.Foldable (Foldable(..), toList)
 import Data.Traversable as T (Traversable(..), foldMapDefault)
 import Data.Maybe (fromMaybe, isNothing, isJust, catMaybes, listToMaybe)
@@ -163,6 +163,10 @@ instance (Monad m, Traversable m) => Traversable (ProofF info m) where
 instance MonadPlus m => MonadPlus (Free (ProofF info m)) where
     mzero       = Impure (Search mzero)
     mplus !p1 p2 = Impure (Search (mplus (return p1) (return p2)))
+
+instance MonadPlus m => Alternative (Free (ProofF info m)) where
+   empty        = Impure (Search mzero)
+   (!p1) <|> p2   = Impure (Search (mplus (return p1) (return p2)))
 
 -- Show
 -----------------------------------------------------------------------------

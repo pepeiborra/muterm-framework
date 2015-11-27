@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -16,9 +17,10 @@
 module MuTerm.Framework.Problem.Types where
 
 import Control.DeepSeq
+import GHC.Generics
 
-data Rewriting  = Rewriting  deriving (Eq, Ord, Show)
-data IRewriting = IRewriting deriving (Eq, Ord, Show)
+data Rewriting  = Rewriting  deriving (Eq, Ord, Show, Generic)
+data IRewriting = IRewriting deriving (Eq, Ord, Show, Generic)
 
 instance NFData Rewriting
 instance NFData IRewriting
